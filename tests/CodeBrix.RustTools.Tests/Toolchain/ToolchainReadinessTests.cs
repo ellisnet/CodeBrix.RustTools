@@ -176,7 +176,9 @@ public class ToolchainReadinessTests
         var folder = sandbox.CreateDirectory("cross-bin");
         foreach (var name in names)
         {
-            var path = sandbox.WriteFile("cross-bin/" + name, "#!/bin/sh\nexit 0\n");
+            // The locator looks for <name>.exe on Windows.
+            var fileName = OperatingSystem.IsWindows() ? name + ".exe" : name;
+            var path = sandbox.WriteFile("cross-bin/" + fileName, "#!/bin/sh\nexit 0\n");
             if (!OperatingSystem.IsWindows())
             {
                 System.IO.File.SetUnixFileMode(path, System.IO.UnixFileMode.UserRead | System.IO.UnixFileMode.UserWrite | System.IO.UnixFileMode.UserExecute);

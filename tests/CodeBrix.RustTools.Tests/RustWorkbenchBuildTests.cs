@@ -160,7 +160,13 @@ public class RustWorkbenchBuildTests
         var finished = progress.Reports.Single(p => p.Phase == CargoProgressPhase.Finished);
         finished.Total.Should().NotBeNull();
         finished.Total.Should().Be(finished.Completed, "every package of the target graph is compiled in a clean build");
-        finished.Total.Should().BeLessThan(everyPlatform.ResolveNodes.Count, "other platforms' dependencies are not counted");
+        // Sample 04's only platform-specific packages (anstyle-wincon, once_cell_polyfill,
+        // windows-link, windows-sys) are Windows ones, so on Windows the target graph is the
+        // whole graph and there is nothing to leave out.
+        if (!OperatingSystem.IsWindows())
+        {
+            finished.Total.Should().BeLessThan(everyPlatform.ResolveNodes.Count, "other platforms' dependencies are not counted");
+        }
     }
 
     [Fact]

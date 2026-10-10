@@ -66,8 +66,8 @@ public class DependencyInspectorTests
 
         //Assert
         lines.Should().ContainInOrder(
-            "app v0.1.0 (/work/app)",
-            "├── helper v0.1.0 (/work/helper)",
+            $"app v0.1.0 ({App.ManifestDirectory})",
+            $"├── helper v0.1.0 ({Helper.ManifestDirectory})",
             "│   ├── libc v0.2.190",
             "│   └── rand v0.7.3",
             "│       └── libc v0.2.190",
@@ -102,7 +102,7 @@ public class DependencyInspectorTests
         var lines = new DependencyInspector(metadata).GetDependencyTree();
 
         //Assert
-        lines.Should().ContainInOrder("a v0.1.0 (/work/a)", "└── b v1.0.0", "    └── c v1.0.0", "        └── b v1.0.0 (*)");
+        lines.Should().ContainInOrder($"a v0.1.0 ({a.ManifestDirectory})", "└── b v1.0.0", "    └── c v1.0.0", "        └── b v1.0.0 (*)");
         lines.Should().HaveCount(4);
     }
 

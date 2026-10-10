@@ -23,8 +23,10 @@ internal sealed class SampleSandbox : IDisposable
         => new SampleSandbox(NewSandboxPath());
 
     /// <summary>Copies rust-samples/test_project_NN into a new sandbox (skipping target/ and
-    /// hidden folders).</summary>
-    public static SampleSandbox FromSample(int number)
+    /// hidden folders), as a folder named <paramref name="folderName"/> (default: the sample's
+    /// own name). Naming the copy here, rather than renaming it afterwards, avoids the Windows
+    /// "access denied" a folder rename gets while a scanner still has a fresh file open.</summary>
+    public static SampleSandbox FromSample(int number, string folderName = null)
     {
         var source = RepoPaths.Sample(number);
         if (!System.IO.Directory.Exists(source))
@@ -32,15 +34,17 @@ internal sealed class SampleSandbox : IDisposable
             throw new DirectoryNotFoundException(source);
         }
 
-        var sandbox = new SampleSandbox(Path.Combine(NewSandboxPath(), RepoPaths.SampleName(number)));
+        var sandbox = new SampleSandbox(Path.Combine(NewSandboxPath(), folderName ?? RepoPaths.SampleName(number)));
         CopyDirectory(source, sandbox.Directory);
         return sandbox;
     }
 
-    /// <summary>Writes a text file (creating folders) relative to the sandbox and returns its path.</summary>
+    /// <summary>Writes a text file (creating folders) relative to the sandbox and returns its full
+    /// path, with the platform's separators (so "a/b.txt" compares equal to library-returned
+    /// paths on Windows too).</summary>
     public string WriteFile(string relativePath, string contents)
     {
-        var path = Path.Combine(Directory, relativePath);
+        var path = Path.GetFullPath(Path.Combine(Directory, relativePath));
         System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path));
         File.WriteAllText(path, contents);
         return path;

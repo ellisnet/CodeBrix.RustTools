@@ -17,13 +17,6 @@ public class SourceArchiveExtractorTests
 {
     private const string RootFolderName = "test_project_05-main";
 
-    private static string CreateRootedSampleCopy(SampleSandbox sandbox)
-    {
-        var rooted = Path.Combine(Path.GetDirectoryName(sandbox.Directory), RootFolderName);
-        Directory.Move(sandbox.Directory, rooted);
-        return rooted;
-    }
-
     private static string ArchivesFolder(string rootedCopy)
         => Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(rootedCopy), "archives")).FullName;
 
@@ -154,8 +147,8 @@ public class SourceArchiveExtractorTests
     public void Extract_zip_strips_the_single_root_folder_and_finds_the_project()
     {
         //Arrange
-        using var sandbox = SampleSandbox.FromSample(5);
-        var rooted = CreateRootedSampleCopy(sandbox);
+        using var sandbox = SampleSandbox.FromSample(5, RootFolderName);
+        var rooted = sandbox.Directory;
         var zip = CreateZip(rooted, Path.Combine(ArchivesFolder(rooted), "test_project_05-main.zip"));
         var destination = OutputFolder(rooted);
 
@@ -178,8 +171,8 @@ public class SourceArchiveExtractorTests
     public void Extract_tar_gz_strips_the_single_root_folder_and_finds_the_project()
     {
         //Arrange
-        using var sandbox = SampleSandbox.FromSample(5);
-        var rooted = CreateRootedSampleCopy(sandbox);
+        using var sandbox = SampleSandbox.FromSample(5, RootFolderName);
+        var rooted = sandbox.Directory;
         var archive = CreateTar(rooted, Path.Combine(ArchivesFolder(rooted), "test_project_05-main.tar.gz"), gzip: true);
 
         //Act
@@ -212,8 +205,8 @@ public class SourceArchiveExtractorTests
     public void Extract_without_stripping_keeps_the_root_folder()
     {
         //Arrange
-        using var sandbox = SampleSandbox.FromSample(5);
-        var rooted = CreateRootedSampleCopy(sandbox);
+        using var sandbox = SampleSandbox.FromSample(5, RootFolderName);
+        var rooted = sandbox.Directory;
         var zip = CreateZip(rooted, Path.Combine(ArchivesFolder(rooted), "keep.zip"));
         var options = new SourceArchiveOptions { StripSingleRootFolder = false };
 
@@ -621,8 +614,8 @@ public class SourceArchiveExtractorTests
     {
         //Arrange
         CargoAvailability.SkipIfMissing();
-        using var sandbox = SampleSandbox.FromSample(5);
-        var rooted = CreateRootedSampleCopy(sandbox);
+        using var sandbox = SampleSandbox.FromSample(5, RootFolderName);
+        var rooted = sandbox.Directory;
         var archive = CreateTar(rooted, Path.Combine(ArchivesFolder(rooted), "test_project_05-main.tar.gz"), gzip: true);
         using var extracted = await new SourceArchiveExtractor().ExtractAsync(archive, OutputFolder(rooted), cancellationToken: TestContext.Current.CancellationToken);
 
