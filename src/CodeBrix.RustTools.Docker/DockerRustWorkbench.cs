@@ -902,16 +902,16 @@ public sealed class DockerRustWorkbench : IDisposable
             return true;
         }, Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
 
-        BuildCachePruneOutcome prune = null;
+        BuildCachePruneResult prune = null;
         if (settings.PruneBuildCache)
         {
-            var cliOptions = Options.CreateClientOptions();
-            prune = await BuildCachePruner.PruneAsync(
-                (args, token) => BuildCachePruner.RunCliAsync(cliOptions, args, token),
-                cancellationToken).ConfigureAwait(false);
-            if (prune.Failure != null)
+            try
             {
-                failures.Add(prune.Failure);
+                prune = await Client.Images.PruneBuildCacheAsync(new BuildCachePruneOptions { All = true }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (DockerCliException ex)
+            {
+                failures.Add("Build cache: " + ex.Message);
             }
         }
 
@@ -921,8 +921,8 @@ public sealed class DockerRustWorkbench : IDisposable
             RemovedImages = images,
             RemovedVolumes = volumes,
             Failures = failures,
-            BuildCachePruned = prune != null && prune.Pruned,
-            BuildCacheReclaimedSpace = prune?.ReclaimedSpace,
+            BuildCachePruned = prune != null,
+            BuildCacheReclaimedSpace = prune?.ReclaimedSpaceText,
             BuildCacheReclaimedBytes = prune?.ReclaimedBytes,
             BuildCachePruneOutput = prune?.Output,
         };
