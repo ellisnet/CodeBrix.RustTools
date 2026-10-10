@@ -1,0 +1,14 @@
+[package]
+name = "test_project_13"
+version = "0.1.0"
+edition = "2024"
+description = "Native library (cdylib + rlib) exporting a C-ABI function, and a binary that calls it"
+license = "MIT"
+publish = false
+
+# cdylib: the native shared library other languages load (libtest_project_13.so,
+# test_project_13.dll). rlib: the Rust library the binary in src/main.rs links against.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]

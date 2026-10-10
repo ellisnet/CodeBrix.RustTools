@@ -1,0 +1,9 @@
+[package]
+name = "no_license_at_all"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "License-gate fixture: declares neither license nor license-file"
+
+[lib]
+path = "lib.rs"

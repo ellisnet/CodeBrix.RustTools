@@ -1,0 +1,69 @@
+manifest-version = "2"
+date = "2026-10-01"
+
+[pkg.cargo]
+version = "0.100.0 (5f94df478 2026-08-27)"
+git_commit_hash = "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"
+
+[pkg.cargo.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.gz"
+hash = "318b85c276b43134102fb49bbb54bfd0757e5cce47a772461149aeab5adea2ab"
+xz_url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.xz"
+xz_hash = "76abff0ad79a10a3152dff640ea0d8b3c37637d9300bf55da41b95c3ddc069c1"
+
+[pkg.cargo.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "94788689e63cc3fb01b33681dc777a2c49f84b10551affba12e3d90366549ff2"
+xz_url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "8720a218461b98d3fe142b4a3bbcc3b7c8134b6e7ee5ad440d29ebb9e154d19a"
+
+[pkg.clippy-preview]
+version = "0.1.99"
+git_commit_hash = "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"
+
+[pkg.clippy-preview.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.gz"
+hash = "d13d16085280bd652d4a77041073264719c9ee92f33702f9dce2ee86777c92b1"
+[pkg.rustc]
+version = "1.99.0 (b940084d7 2026-09-28)"
+git_commit_hash = "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"
+
+[pkg.rustc.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz"
+hash = "2f6b9c9cdc9c2e87ab2e27335e8bb0c4dbe4daea486e39030b66980058f74353"
+xz_url = "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.xz"
+xz_hash = "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450"
+
+[pkg.rustc.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "0f0709690eda82b274b7778b1c9c6e9ea978055e912b316ea66c36c2410aa301"
+[pkg.rustfmt-preview]
+version = "1.10.0"
+git_commit_hash = "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"
+
+[pkg.rustfmt-preview.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.gz"
+hash = "c8d86490e38920ab7783483dc828695a9a678eff541c5fa793f165b374e87312"
+xz_url = "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.xz"
+xz_hash = "8b1436085c081e5efa88febadf667171a7a107073d168cd32b249a8eb70800da"
+
+[pkg.rustfmt-preview.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "7d5e4998b4a35182d92f9303bb8e3f491889fc7022c93c9fbd64d5003e267a80"
+[renames.clippy]
+to = "clippy-preview"
+
+[renames.rustfmt]
+to = "rustfmt-preview"
+
+[profiles]
+complete = ["rustc", "cargo", "rust-std", "rust-mingw", "rust-docs", "rustfmt-preview", "clippy-preview", "rust-analyzer-preview", "rust-src", "llvm-tools-preview", "rust-analysis", "miri-preview", "rustc-codegen-cranelift-preview"]
+default = ["rustc", "cargo", "rust-std", "rust-mingw", "rust-docs", "rustfmt-preview", "clippy-preview"]
+minimal = ["rustc", "cargo", "rust-std", "rust-mingw"]

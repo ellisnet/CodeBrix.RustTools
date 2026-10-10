@@ -1,0 +1,16 @@
+[package]
+name = "unitconv_cli"
+description = "Command-line converter built on unitconv_core"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+publish.workspace = true
+
+[[bin]]
+name = "unitconv"
+path = "src/main.rs"
+
+[dependencies]
+unitconv_core.workspace = true
+anyhow.workspace = true
+clap.workspace = true

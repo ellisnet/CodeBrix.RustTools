@@ -1,0 +1,16 @@
+[package]
+name = "test_project_07"
+version = "0.1.0"
+edition = "2024"
+description = "Parallel word-frequency analysis with rayon + regex over a public-domain text"
+publish = false
+
+[dependencies]
+rayon = "1.12"
+regex = "1.13"
+# `dirs` is MIT OR Apache-2.0, but its dependency chain dirs-sys -> option-ext is MPL-2.0
+# (a realistic transitive copyleft "surprise" for license-gate testing).
+dirs = "6.0"
+
+[profile.release]
+codegen-units = 1

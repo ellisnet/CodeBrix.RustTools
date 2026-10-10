@@ -1,0 +1,15 @@
+[package]
+name = "test_project_11"
+version = "0.1.0"
+edition = "2024"
+description = "Procedural PNG generation (image crate) configured by a TOML file"
+publish = false
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "1.1"
+
+# Image generation is slow in debug builds; optimize dependencies even in dev.
+[profile.dev.package."*"]
+opt-level = 2

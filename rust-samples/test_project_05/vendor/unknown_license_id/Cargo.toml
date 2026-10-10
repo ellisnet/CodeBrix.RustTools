@@ -1,0 +1,10 @@
+[package]
+name = "unknown_license_id"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "License-gate fixture: syntactically valid but non-SPDX license identifier"
+license = "Proprietary-Acme-1.0"
+
+[lib]
+path = "lib.rs"

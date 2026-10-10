@@ -1,0 +1,129 @@
+{
+  "crate": {
+    "id": "itoa",
+    "name": "itoa",
+    "updated_at": "2026-03-20T00:12:37.043881Z",
+    "versions": [
+      2143864,
+      1904450,
+      1893757,
+      1467197
+    ],
+    "keywords": [
+      "integer"
+    ],
+    "categories": [
+      "value-formatting",
+      "no-std",
+      "no-std::no-alloc"
+    ],
+    "badges": [],
+    "created_at": "2016-06-25T21:50:33.832Z",
+    "downloads": 1441855044,
+    "recent_downloads": 347057094,
+    "default_version": "1.0.18",
+    "num_versions": 37,
+    "yanked": false,
+    "max_version": "1.0.18",
+    "newest_version": "1.0.18",
+    "max_stable_version": "1.0.18",
+    "description": "Fast integer primitive to string conversion",
+    "homepage": null,
+    "documentation": "https://docs.rs/itoa",
+    "repository": "https://github.com/dtolnay/itoa",
+    "links": {
+      "version_downloads": "/api/v1/crates/itoa/downloads",
+      "versions": null,
+      "owners": "/api/v1/crates/itoa/owners",
+      "owner_team": "/api/v1/crates/itoa/owner_team",
+      "owner_user": "/api/v1/crates/itoa/owner_user",
+      "reverse_dependencies": "/api/v1/crates/itoa/reverse_dependencies"
+    },
+    "exact_match": false,
+    "trustpub_only": false
+  },
+  "versions": [
+    {
+      "id": 2143864,
+      "crate": "itoa",
+      "num": "1.0.18",
+      "yanked": false,
+      "license": "MIT OR Apache-2.0",
+      "created_at": "2026-03-20T00:12:37.043881Z",
+      "updated_at": "2026-03-20T00:12:37.043881Z",
+      "downloads": 358771655,
+      "crate_size": 15935,
+      "rust_version": "1.68",
+      "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+      "yank_message": null
+    },
+    {
+      "id": 1904450,
+      "crate": "itoa",
+      "num": "1.0.17",
+      "yanked": false,
+      "license": "MIT OR Apache-2.0",
+      "created_at": "2025-12-27T06:56:40.320008Z",
+      "updated_at": "2025-12-27T06:56:40.320008Z",
+      "downloads": 136924209,
+      "crate_size": 15905,
+      "rust_version": "1.68",
+      "checksum": "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2",
+      "yank_message": null
+    },
+    {
+      "id": 1893757,
+      "crate": "itoa",
+      "num": "1.0.16",
+      "yanked": false,
+      "license": "MIT OR Apache-2.0",
+      "created_at": "2025-12-21T01:04:50.718237Z",
+      "updated_at": "2025-12-21T01:04:50.718237Z",
+      "downloads": 4001197,
+      "crate_size": 15757,
+      "rust_version": "1.68",
+      "checksum": "7ee5b5339afb4c41626dde77b7a611bd4f2c202b897852b4bcf5d03eddc61010",
+      "yank_message": null
+    },
+    {
+      "id": 1467197,
+      "crate": "itoa",
+      "num": "1.0.15",
+      "yanked": false,
+      "license": "MIT OR Apache-2.0",
+      "created_at": "2025-03-03T23:42:45.916886Z",
+      "updated_at": "2025-03-03T23:42:45.916886Z",
+      "downloads": 268172303,
+      "crate_size": 11231,
+      "rust_version": "1.36",
+      "checksum": "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c",
+      "yank_message": null
+    }
+  ],
+  "keywords": [
+    {
+      "id": "integer",
+      "keyword": "integer",
+      "created_at": "2015-07-08T14:40:04.524560Z",
+      "crates_cnt": 227
+    }
+  ],
+  "categories": [
+    {
+      "id": "value-formatting",
+      "category": "Value formatting",
+      "slug": "value-formatting",
+      "description": "Crates to allow an application to format values for display to a user, potentially adapting the display to various languages and regions.",
+      "created_at": "2017-01-17T19:13:05.112025Z",
+      "crates_cnt": 728
+    },
+    {
+      "id": "no-std",
+      "category": "No standard library",
+      "slug": "no-std",
+      "description": "Crates that are able to function without the Rust standard library.",
+      "created_at": "2017-02-10T01:52:09.447906Z",
+      "crates_cnt": 13672
+    }
+  ]
+}

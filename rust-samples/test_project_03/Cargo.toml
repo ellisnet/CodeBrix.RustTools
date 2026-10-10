@@ -1,0 +1,15 @@
+[package]
+name = "test_project_03"
+version = "0.1.0"
+edition = "2024"
+description = "Async tokio + reqwest app that queries several keyless public APIs concurrently"
+publish = false
+
+[dependencies]
+# reqwest 0.13 renamed the old `rustls-tls` feature to `rustls`.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "http2", "charset"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.53", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

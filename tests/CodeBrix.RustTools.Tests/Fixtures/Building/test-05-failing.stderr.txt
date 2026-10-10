@@ -1,0 +1,10 @@
+   Compiling test_project_05 v0.1.0 (/work/test_project_05)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/debug/deps/textkit-24ba16101e331dcd)
+     Running unittests src/main.rs (target/debug/deps/textkit-20e03ad6a94420ce)
+     Running tests/binary_runs.rs (target/debug/deps/binary_runs-5676aef9d6f0d751)
+     Running tests/library_api.rs (target/debug/deps/library_api-945ce9b7f0c6f286)
+error: test failed, to rerun pass `--test library_api`
+   Doc-tests textkit
+error: 1 target failed:
+    `--test library_api`

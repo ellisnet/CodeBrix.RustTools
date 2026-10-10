@@ -1,0 +1,11 @@
+[package]
+name = "test_project_08"
+version = "0.1.0"
+edition = "2024"
+description = "SQLite (rusqlite, bundled) book catalog with a thiserror error enum"
+publish = false
+
+[dependencies]
+# `bundled` compiles SQLite from C source via the cc crate - no system libsqlite3 needed.
+rusqlite = { version = "0.40", features = ["bundled"] }
+thiserror = "2.0"

@@ -1,0 +1,95 @@
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+
+CodeBrix.RustTools is a .NET library that inspects, license-checks, builds
+and runs Rust applications using the Rust toolchain already installed on the
+local machine. CodeBrix.RustTools does not incorporate any third-party source
+code into its own assemblies. It runs the locally installed Rust tools
+(rustup, cargo, rustc, clippy, rustfmt and the C toolchain) as separate
+processes, and it is a standalone client that issues HTTP requests to the
+Rust release distribution server (static.rust-lang.org) and to the crates.io
+web API.
+
+The Rust release manifests are published by the Rust project; see
+https://www.rust-lang.org/policies for its policies. Use of the crates.io API
+is subject to the crates.io policies at https://crates.io/policies, which
+require every API client to send a User-Agent that identifies it.
+
+CodeBrix.RustTools.Docker, the second package built from this repository,
+likewise incorporates no third-party source code. It drives a Docker engine
+through CodeBrix.Docker, and the Dockerfiles it generates fetch software at
+the consumer's request and under that software's own terms: the official
+`rust` image (Docker Official Images, from Docker Hub; the Rust toolchain
+on Debian), Debian packages (including mingw-w64 for Windows builds), rustup
+components and targets, and - only when an Android target is requested -
+the Android NDK from Google, which is licensed under the Android Software
+Development Kit License Agreement (https://developer.android.com/studio/terms).
+Inside the build container cargo downloads the crates the consumer's own
+project depends on from crates.io. Neither package redistributes any of
+them, and no Microsoft SDK or C runtime and nothing created by Apple is
+fetched.
+
+IMPORTANT NOTICE: macOS binaries produced by CodeBrix.RustTools.Docker are
+built in Docker containers without Apple's SDK, tools or files and are for
+development and testing only. They must not be distributed or used in any
+production environment. Any macOS build that will be distributed or run in
+production must be produced on a Mac and can be created using
+CodeBrix.RustTools, where Apple's toolchain, SDK and code signing are
+available under Apple's own license terms.
+
+The list of license identifiers in the OpenSourceLicense enumeration follows
+the SPDX License List (https://spdx.org/licenses/); only identifiers, names
+and classifications are used, no license texts.
+
+Repository content that is not part of the NuGet package:
+
+  Test fixtures (tests/CodeBrix.RustTools.Tests/Fixtures/):
+  - channel-rust-stable.toml and rustup-release-stable.toml: trimmed
+    excerpts of the Rust stable channel and rustup release manifests
+    published at https://static.rust-lang.org.
+  - crates-io-itoa.json: a trimmed crates.io API response describing the
+    "itoa" crate (MIT OR Apache-2.0).
+  - crates-io-yanked-prerelease.json: a hand-written document in the same
+    shape, describing a fictitious crate.
+  - Building/*.jsonl, *.stderr.txt, *.stdout.txt: output captured from
+    cargo, rustc, clippy, rustfmt and libtest while building and testing
+    this repository's own sample projects (rust-samples/). They contain
+    machine-generated messages about the samples' code and the names and
+    versions of the crates those samples depend on; no third-party source
+    code.
+
+  Docker test project (tests/CodeBrix.RustTools.Docker.Tests/): written
+  for this repository; it holds no fixture files. Its live tests build the
+  sample projects below inside containers and generate the Dockerfiles at
+  run time; nothing they download or build is stored in the repository.
+
+  Rust sample projects (rust-samples/):
+  - Written for this repository. Their Cargo.toml / Cargo.lock files name
+    third-party crates from crates.io, which cargo downloads when a sample
+    is built; no crate source is stored in this repository.
+  - rust-samples/test_project_07/data/moby_dick_loomings.txt: an excerpt
+    of Chapter 1 ("Loomings") of Herman Melville's Moby-Dick; or, The Whale
+    (1851), taken from Project Gutenberg eBook #2701. The text is in the
+    public domain.
+  - rust-samples/test_project_05/vendor/licensed_by_file/LICENSE.txt: a
+    short permissive license text written for this repository as a
+    license-checker fixture.
+
+  Maintainer notes and a check script (tools/macos-cross/): written for
+  this repository. They contain no Apple SDK files, headers, .tbd stubs,
+  binaries or other content created by Apple. The libSystem symbol stub the
+  Docker image derives at image build time comes from the Rust toolchain's
+  own files, a probe program and standard C library names, never from an
+  Apple file.
+
+Jeremy Ellis and contributors license the CodeBrix.RustTools project
+to you under the terms set forth in the LICENSE file, which is located at
+the root of this repository.
+
+If you have any questions about any third-party code or services referenced
+here, or if you believe that any third-party code has been included in
+CodeBrix.RustTools in error, please open a new issue at:
+https://github.com/ellisnet/CodeBrix.RustTools/issues
+
+================================================================================
+
+END OF THIRD-PARTY SOFTWARE NOTICES AND INFORMATION

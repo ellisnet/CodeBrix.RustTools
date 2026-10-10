@@ -1,0 +1,20 @@
+Diff in /work/test_project_10/src/main.rs:54:
+ 
+     #[allow(unused_parens)]
+     let quiet = (1 + 1); // the one place a lint is silenced locally, to show allow-on-item still works
+[31m-    if (quiet > 1) { // warning: unnecessary parentheses around `if` condition (unused_parens)
+(B[m[32m+    if (quiet > 1) {
+(B[m[32m+        // warning: unnecessary parentheses around `if` condition (unused_parens)
+(B[m         println!("{}", old_greet("world")); // warning: use of deprecated function (deprecated)
+     }
+ 
+Diff in /work/test_project_10/src/main.rs:61:
+[31m-    while true { // warning: denote infinite loops with `loop { ... }` (while_true)
+(B[m[32m+    while true {
+(B[m[32m+        // warning: denote infinite loops with `loop { ... }` (while_true)
+(B[m         break;
+     }
+ 
+Diff in /work/test_project_10/src/main.rs:65:
+     let counter = my_counter { value: answer };
+     let flag = true;

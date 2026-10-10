@@ -1,0 +1,20 @@
+# Configuration for test_project_11. Paths are relative to this sample's folder.
+output_dir = "output"
+width = 640
+height = 400
+
+[colors]
+# Gradient end points and the Mandelbrot palette, as #RRGGBB.
+start = "#0b1d51"
+end = "#f2a65a"
+palette = ["#000764", "#206bcb", "#edffff", "#ffaa00", "#000200"]
+
+[mandelbrot]
+max_iterations = 200
+center_x = -0.6
+center_y = 0.0
+zoom = 1.0
+
+[plasma]
+scale = 0.035
+seed = 7

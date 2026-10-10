@@ -1,0 +1,25 @@
+[package]
+name = "test_project_12"
+version = "0.1.0"
+edition = "2024"
+description = "Batch job: generate records, write JSONL with progress bars, read back and validate"
+publish = false
+
+[lib]
+name = "batchjob"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+env_logger = "0.11"
+indicatif = "0.18"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.27", features = ["v4", "serde"] }
+
+[dev-dependencies]
+criterion = "0.8"
+
+[[bench]]
+name = "record_throughput"
+harness = false

@@ -1,0 +1,27 @@
+# Virtual workspace manifest: no [package] at the root, only members.
+[workspace]
+members = [
+    "crates/unitconv_core",
+    "crates/unitconv_report",
+    "crates/unitconv_cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+# Internal crate, referenced by path from the two binaries.
+unitconv_core = { path = "crates/unitconv_core" }
+# Shared third-party dependencies, inherited by members with `workspace = true`.
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+
+[profile.release]
+lto = "thin"

@@ -1,0 +1,9 @@
+[package]
+name = "test_project_10"
+version = "0.1.0"
+edition = "2024"
+description = "Builds and runs fine, but deliberately produces many distinct compiler warnings"
+publish = false
+build = "build.rs"
+
+[dependencies]

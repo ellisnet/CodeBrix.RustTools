@@ -1,0 +1,13 @@
+[package]
+name = "unitconv_report"
+description = "Binary that writes a conversion table (JSON) into the workspace output folder"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only"
+publish.workspace = true
+
+[dependencies]
+unitconv_core.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true

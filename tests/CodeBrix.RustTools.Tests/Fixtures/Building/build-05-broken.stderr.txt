@@ -1,0 +1,5 @@
+   Compiling no_license_at_all v0.1.0 (/work/test_project_05/vendor/no_license_at_all)
+   Compiling licensed_by_file v0.1.0 (/work/test_project_05/vendor/licensed_by_file)
+   Compiling unknown_license_id v0.1.0 (/work/test_project_05/vendor/unknown_license_id)
+   Compiling test_project_05 v0.1.0 (/work/test_project_05)
+error: could not compile `test_project_05` (bin "textkit") due to 1 previous error

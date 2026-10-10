@@ -1,0 +1,10 @@
+# name, mean radius (km), orbital period (Earth days)
+# build.rs turns this file into a Rust array; edit it and rebuild to see the build script re-run.
+Mercury, 2439.7, 87.97
+Venus, 6051.8, 224.70
+Earth, 6371.0, 365.26
+Mars, 3389.5, 686.98
+Jupiter, 69911, 4332.59
+Saturn, 58232, 10759.22
+Uranus, 25362, 30688.5
+Neptune, 24622, 60182

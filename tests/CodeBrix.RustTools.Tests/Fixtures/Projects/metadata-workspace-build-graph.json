@@ -1,0 +1,518 @@
+{
+ "packages": [
+  {
+   "name": "app",
+   "version": "0.1.0",
+   "id": "path+file:///w#app@0.1.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": null,
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "app",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/w/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "core",
+   "version": "0.1.0",
+   "id": "path+file:///w/core#core@0.1.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": null,
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "core",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/w/core/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "tool",
+   "version": "0.1.0",
+   "id": "path+file:///w/tool#tool@0.1.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": null,
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "tool",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/w/tool/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "serde",
+   "version": "1.0.228",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "serde",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/serde-1.0.228/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "serde_derive",
+   "version": "1.0.228",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "serde_derive",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/serde_derive-1.0.228/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "cc",
+   "version": "1.2.0",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "cc",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/cc-1.2.0/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "proptest",
+   "version": "1.5.0",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#proptest@1.5.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "proptest",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/proptest-1.5.0/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "rand",
+   "version": "0.8.5",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "rand",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/rand-0.8.5/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "itoa",
+   "version": "1.0.18",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "itoa",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/itoa-1.0.18/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "tempfile",
+   "version": "3.10.0",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.10.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "tempfile",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/tempfile-3.10.0/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "clap",
+   "version": "4.5.0",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "clap",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/clap-4.5.0/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "log",
+   "version": "0.4.22",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "log",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/log-0.4.22/Cargo.toml",
+   "edition": "2021"
+  },
+  {
+   "name": "orphan",
+   "version": "0.1.0",
+   "id": "registry+https://github.com/rust-lang/crates.io-index#orphan@0.1.0",
+   "license": "MIT",
+   "license_file": null,
+   "source": "registry+https://github.com/rust-lang/crates.io-index",
+   "dependencies": [],
+   "targets": [
+    {
+     "kind": [
+      "lib"
+     ],
+     "crate_types": [
+      "lib"
+     ],
+     "name": "orphan",
+     "src_path": "/x/src/lib.rs",
+     "edition": "2021"
+    }
+   ],
+   "features": {},
+   "manifest_path": "/r/orphan-0.1.0/Cargo.toml",
+   "edition": "2021"
+  }
+ ],
+ "workspace_members": [
+  "path+file:///w#app@0.1.0",
+  "path+file:///w/core#core@0.1.0",
+  "path+file:///w/tool#tool@0.1.0"
+ ],
+ "workspace_default_members": [
+  "path+file:///w#app@0.1.0"
+ ],
+ "resolve": {
+  "nodes": [
+   {
+    "id": "path+file:///w#app@0.1.0",
+    "deps": [
+     {
+      "name": "core",
+      "pkg": "path+file:///w/core#core@0.1.0",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       }
+      ]
+     },
+     {
+      "name": "serde",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       }
+      ]
+     },
+     {
+      "name": "cc",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.0",
+      "dep_kinds": [
+       {
+        "kind": "build",
+        "target": null
+       }
+      ]
+     },
+     {
+      "name": "proptest",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#proptest@1.5.0",
+      "dep_kinds": [
+       {
+        "kind": "dev",
+        "target": null
+       }
+      ]
+     },
+     {
+      "name": "log",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       },
+       {
+        "kind": "dev",
+        "target": null
+       }
+      ]
+     }
+    ],
+    "features": [
+     "default"
+    ]
+   },
+   {
+    "id": "path+file:///w/core#core@0.1.0",
+    "deps": [
+     {
+      "name": "itoa",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       }
+      ]
+     },
+     {
+      "name": "tempfile",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.10.0",
+      "dep_kinds": [
+       {
+        "kind": "dev",
+        "target": null
+       }
+      ]
+     }
+    ],
+    "features": []
+   },
+   {
+    "id": "path+file:///w/tool#tool@0.1.0",
+    "deps": [
+     {
+      "name": "clap",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.0"
+     }
+    ],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+    "deps": [
+     {
+      "name": "serde_derive",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       }
+      ]
+     }
+    ],
+    "features": [
+     "derive"
+    ]
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.0",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#proptest@1.5.0",
+    "deps": [
+     {
+      "name": "rand",
+      "pkg": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5",
+      "dep_kinds": [
+       {
+        "kind": null,
+        "target": null
+       }
+      ]
+     }
+    ],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.10.0",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.0",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+    "deps": [],
+    "features": []
+   },
+   {
+    "id": "registry+https://github.com/rust-lang/crates.io-index#orphan@0.1.0",
+    "deps": [],
+    "features": []
+   }
+  ],
+  "root": "path+file:///w#app@0.1.0"
+ },
+ "target_directory": "/w/target",
+ "version": 1,
+ "workspace_root": "/w",
+ "metadata": null
+}

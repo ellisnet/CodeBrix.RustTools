@@ -1,0 +1,3 @@
+   Compiling test_project_10 v0.1.0 (/work/test_project_10)
+warning: test_project_10@0.1.0: this is an intentional build-script warning from test_project_10
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s

@@ -1,0 +1,21 @@
+[package]
+name = "test_project_06"
+version = "0.3.1"
+edition = "2024"
+description = "Build-script code generation (OUT_DIR + include!) and multiple [[bin]] targets"
+publish = false
+build = "build.rs"
+# No default binary: the two binaries are declared explicitly below. They live in
+# src/programs/ rather than the conventional src/bin/ so that a blanket "bin" ignore
+# rule in a repository that carries this sample cannot swallow them.
+autobins = false
+
+[[bin]]
+name = "buildinfo"
+path = "src/programs/buildinfo.rs"
+
+[[bin]]
+name = "crc32sum"
+path = "src/programs/crc32sum.rs"
+
+[dependencies]
