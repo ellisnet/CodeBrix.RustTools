@@ -30,9 +30,10 @@ Feature areas:
   - License gate: SPDX license expressions evaluated against a policy for
     every crate in the resolved graph; a failed audit stops the build (or,
     with LicenseGateMode.ReportOnly, is reported while the build goes on).
-  - Cargo commands (build, check, test, clean, doc, clippy, fmt) with typed
-    diagnostics, artifacts, test counts, progress and cancellation that
-    kills the whole cargo process tree.
+  - Cargo commands (build, check, test, clean, doc, clippy, fmt, fetch) with
+    typed diagnostics, artifacts, test counts, progress and cancellation
+    that kills the whole cargo process tree. fetch downloads every
+    dependency up front, so later commands can run offline.
   - Running the programs cargo built.
   - Source archives (zip, tar, tar.gz / tgz): safe extraction, then
     "extract and build" in one call.
@@ -86,7 +87,9 @@ Network:       the library's own HTTP traffic is limited to
                (static.rust-lang.org) and CratesIoClient /
                InspectDependenciesAsync(checkOutdated: true) (crates.io).
                cargo itself may download crates unless you set Offline or
-               Frozen. Detection is offline.
+               Frozen; FetchAsync (`cargo fetch`) downloads them all up
+               front, so the commands after it can run with Offline.
+               Detection is offline.
 
 
 KEY NAMESPACES / USINGS
@@ -176,6 +179,7 @@ RustWorkbench (sealed class, CodeBrix.RustTools) - the entry point
   DocAsync(...same parameters...)
   ClippyAsync(...same parameters...)
   FmtAsync(...same parameters...)
+  FetchAsync(...same parameters...)
 
       For build, check, test, doc and clippy the workbench, in order:
         1. detects the toolchain from the project folder (from the cache
@@ -230,9 +234,25 @@ RustWorkbench (sealed class, CodeBrix.RustTools) - the entry point
            you set is used as it is;
         5. runs cargo in project.Directory and attaches LicenseAudit (passed
            or not, in ReportOnly) and Readiness.
-      clean and fmt skip steps 1-4. The caller's options object is never
+      clean and fmt skip steps 1-4. fetch checks only that cargo and rustc
+      are installed (downloading needs no C toolchain) and skips steps 2-4
+      and the Linux cross check. The caller's options object is never
       modified. A failed compile is a result with Success false, not an
       exception.
+
+      FetchAsync runs `cargo fetch`: it downloads every dependency of the
+      project into the local cache (CARGO_HOME) - for every platform, or
+      with options.TargetTriple for that target only - and compiles
+      nothing. Afterwards every command, the license gate's `cargo
+      metadata` and InspectDependenciesAsync included, can run with
+      Offline = true. Of the options only TargetTriple, Locked, Offline,
+      Frozen, Verbose, Environment, Timeout and ExtraArguments apply; no
+      license gate, no crate-count estimate. Each download is a
+      CargoProgressPhase.Downloading report naming the crate (none for
+      crates already cached). A failed download (for example no network)
+      is a result with Success false and cargo's message in Errors and
+      StandardError, not an exception; a missing cargo or rustc throws
+      ToolchainNotFoundException with guidance.
 
   Dependencies, archives, running:
   Task<DependencyReport> InspectDependenciesAsync(CargoProject project,
@@ -802,7 +822,8 @@ CargoRunner (sealed class) - cargo without the workbench's checks
       CargoCommand command, CargoBuildOptions options = null,
       IProgress<CargoProgress> progress = null,
       CancellationToken cancellationToken = default)
-  BuildAsync / CheckAsync / CleanAsync / DocAsync / ClippyAsync / FmtAsync
+  BuildAsync / CheckAsync / CleanAsync / DocAsync / ClippyAsync / FmtAsync /
+  FetchAsync
       (string projectDirectory, CargoBuildOptions options = null,
        IProgress<CargoProgress> progress = null,
        CancellationToken cancellationToken = default)
@@ -810,7 +831,7 @@ CargoRunner (sealed class) - cargo without the workbench's checks
   projectDirectory may be a folder or a Cargo.toml path. CargoRunner
   ignores LicensePolicy and does not check readiness.
 
-CargoCommand: Build, Check, Test, Clean, Doc, Clippy, Fmt
+CargoCommand: Build, Check, Test, Clean, Doc, Clippy, Fmt, Fetch
 CargoProfile: Debug (no flag), Release (--release)
 
 CargoBuildOptions (sealed class) - one option per cargo flag
@@ -1541,6 +1562,17 @@ Example 13 - Custom tool locations, environment and offline builds
     options.Environment["RUSTFLAGS"] = "-D warnings";
     var workbench = new RustWorkbench(options);
     var project = workbench.OpenProject("/src/my-app");
+
+    // Online once: download every dependency into CARGO_HOME.
+    var fetch = await workbench.FetchAsync(project,
+        new CargoBuildOptions { Locked = true });
+    if (!fetch.Success)
+    {
+        Console.WriteLine(fetch.StandardError);    // e.g. no network
+        return;
+    }
+
+    // From here on nothing touches the network.
     var result = await workbench.CheckAsync(project,
         new CargoBuildOptions { Offline = true });
 
@@ -1613,8 +1645,8 @@ PERFORMANCE TIPS
   ExpectedCrateCount set (or without progress) to skip it.
 - Keep the project's target/ folder between builds; cargo then rebuilds only
   what changed (BuildArtifact.Fresh tells you which artifacts were reused).
-- Set Offline (or Frozen) when the registry cache is known to be complete:
-  it avoids index updates and makes failures immediate.
+- Run FetchAsync once, then set Offline (or Frozen) for the commands that
+  follow: it avoids index updates and makes failures immediate.
 - crates.io requests are spaced by CratesIoRequestInterval across the whole
   process; checkOutdated on a large graph takes about a second per crate.
 - The stable channel manifest is large; cache the ToolUpdateReport rather
@@ -1663,7 +1695,10 @@ COMMON PITFALLS TO AVOID
 - `cargo metadata` needs every dependency's manifest. With Offline it works
   only when the lockfile's crates are already in the local registry cache;
   otherwise it fails with CargoCommandException (the gate inherits the
-  build's Offline / Locked / Frozen settings).
+  build's Offline / Locked / Frozen settings). The same goes for an Offline
+  build, which fails with cargo's "no matching package named ... found".
+  Call FetchAsync first (online) to fill the cache, or leave Offline off
+  and let cargo download what it needs.
 - A failed compile is NOT an exception: check result.Success and
   result.Errors. Exceptions mean the command could not run (missing tools,
   license gate, missing component, cancellation).
@@ -1837,6 +1872,7 @@ Gate a build:   new CargoBuildOptions { LicensePolicy = policy }
 Build:          var b = await wb.BuildAsync(p, options, progress, ct);
 Others:         wb.CheckAsync / TestAsync / CleanAsync / DocAsync /
                 ClippyAsync / FmtAsync / RunCargoAsync(p, command, ...)
+Download deps:  await wb.FetchAsync(p);  then Offline = true needs no network
 Outcome:        b.Success, b.Errors, b.Warnings, b.RunnableArtifacts
 Tests:          t.TestsPassed, t.TestsFailed, t.FailedTestNames
 

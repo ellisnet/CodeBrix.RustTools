@@ -11,8 +11,8 @@ using CodeBrix.RustTools.Toolchain;
 namespace CodeBrix.RustTools.Building;
 
 /// <summary>
-/// Runs cargo subcommands (build, check, test, clean, doc, clippy, fmt) on a project with the
-/// cargo installed on this machine, and turns cargo's <c>--message-format=json</c> output into
+/// Runs cargo subcommands (build, check, test, clean, doc, clippy, fmt, fetch) on a project with
+/// the cargo installed on this machine, and turns cargo's <c>--message-format=json</c> output into
 /// typed diagnostics, artifacts, test counts and progress reports. Cancellation and timeouts
 /// kill the whole cargo process tree (rustc, build scripts, linkers). Every cargo process runs
 /// with <c>RUSTUP_AUTO_INSTALL=0</c> and <c>CARGO_TERM_COLOR=never</c> unless the options set
@@ -194,6 +194,25 @@ public sealed class CargoRunner
         => RunAsync(projectDirectory, CargoCommand.Fmt, options, progress, cancellationToken);
 
     /// <summary>
+    /// Runs <c>cargo fetch</c>: downloads every dependency of the project into the local cache
+    /// (CARGO_HOME), for every platform or - with <see cref="CargoBuildOptions.TargetTriple"/> -
+    /// for that target only, so that later commands can run with
+    /// <see cref="CargoBuildOptions.Offline"/>. Compiles nothing. Of the options only
+    /// <see cref="CargoBuildOptions.TargetTriple"/>, <see cref="CargoBuildOptions.Locked"/>,
+    /// <see cref="CargoBuildOptions.Offline"/>, <see cref="CargoBuildOptions.Frozen"/>,
+    /// <see cref="CargoBuildOptions.Verbose"/>, the environment, timeout and
+    /// <see cref="CargoBuildOptions.ExtraArguments"/> apply. Each download is a
+    /// <see cref="CargoProgressPhase.Downloading"/> report. See <see cref="RunAsync"/> for the
+    /// parameters and exceptions.
+    /// </summary>
+    /// <param name="projectDirectory">The project folder or its Cargo.toml.</param>
+    /// <param name="options">The command options; <c>null</c> uses the defaults.</param>
+    /// <param name="progress">Receives progress reports; may be <c>null</c>.</param>
+    /// <param name="cancellationToken">Kills the cargo process tree when cancelled.</param>
+    public Task<CargoCommandResult> FetchAsync(string projectDirectory, CargoBuildOptions options = null, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
+        => RunAsync(projectDirectory, CargoCommand.Fetch, options, progress, cancellationToken);
+
+    /// <summary>
     /// Runs <c>cargo test</c> and parses the libtest output of every test binary. See
     /// <see cref="RunAsync"/> for the parameters and exceptions.
     /// </summary>
@@ -217,6 +236,7 @@ public sealed class CargoRunner
         CargoCommand.Doc => "doc",
         CargoCommand.Clippy => "clippy",
         CargoCommand.Fmt => "fmt",
+        CargoCommand.Fetch => "fetch",
         _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown cargo command."),
     };
 
@@ -250,7 +270,7 @@ public sealed class CargoRunner
             arguments.Add("-v");
         }
 
-        if (command != CargoCommand.Fmt)
+        if (command is not (CargoCommand.Fmt or CargoCommand.Fetch))
         {
             if (!string.IsNullOrWhiteSpace(options.CustomProfileName))
             {
@@ -283,7 +303,10 @@ public sealed class CargoRunner
             }
         }
 
-        AddRepeated(arguments, "-p", options.Packages);
+        if (command != CargoCommand.Fetch)
+        {
+            AddRepeated(arguments, "-p", options.Packages);
+        }
 
         if (compiles)
         {

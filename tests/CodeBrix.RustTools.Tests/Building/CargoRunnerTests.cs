@@ -103,6 +103,7 @@ public class CargoRunnerTests
     [InlineData(CargoCommand.Doc, "doc")]
     [InlineData(CargoCommand.Clippy, "clippy")]
     [InlineData(CargoCommand.Fmt, "fmt")]
+    [InlineData(CargoCommand.Fetch, "fetch")]
     public void SubcommandName_maps_every_command(CargoCommand command, string expected)
         => CargoRunner.SubcommandName(command).Should().Be(expected);
 
@@ -198,6 +199,27 @@ public class CargoRunnerTests
         //Assert
         arguments.Should().Equal("clean", "--release", "-p", "core", "--target", "x86_64-unknown-linux-gnu", "--offline");
     }
+
+    [Fact]
+    public void BuildArguments_fetch_keeps_only_the_flags_fetch_understands()
+    {
+        //Arrange
+        var options = new CargoBuildOptions { Profile = CargoProfile.Release, AllFeatures = true, NoDefaultFeatures = true, AllTargets = true, Jobs = 2, TargetTriple = "aarch64-unknown-linux-gnu", Locked = true, Offline = true, Frozen = true, Verbose = true };
+        options.Features.Add("json");
+        options.Packages.Add("core");
+        options.Bins.Add("x");
+        options.ExtraArguments.Add("--quiet");
+
+        //Act
+        var arguments = Args(CargoCommand.Fetch, options, "/p/Cargo.toml");
+
+        //Assert
+        arguments.Should().Equal("fetch", "--manifest-path", "/p/Cargo.toml", "-v", "--target", "aarch64-unknown-linux-gnu", "--locked", "--offline", "--frozen", "--quiet");
+    }
+
+    [Fact]
+    public void BuildArguments_fetch_defaults_to_every_platform()
+        => Args(CargoCommand.Fetch).Should().Equal("fetch");
 
     [Fact]
     public void BuildArguments_fmt_checks_by_default_and_ignores_build_flags()
@@ -470,7 +492,7 @@ public class CargoRunnerTests
         using var sandbox = SampleSandbox.FromSample(4);
 
         //Act
-        var result = await new CargoRunner().BuildAsync(sandbox.Directory, new CargoBuildOptions { Offline = true }, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await new CargoRunner().BuildAsync(sandbox.Directory, new CargoBuildOptions { Locked = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         //Assert
         result.Success.Should().BeTrue(result.StandardError);
@@ -484,7 +506,7 @@ public class CargoRunnerTests
         //Arrange
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(4);
-        var options = new CargoBuildOptions { Offline = true };
+        var options = new CargoBuildOptions { Locked = true };
         options.Packages.Add("unitconv_cli");
 
         //Act
@@ -502,14 +524,17 @@ public class CargoRunnerTests
         //Arrange
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(2);
+        var runner = new CargoRunner();
+        var fetch = await runner.FetchAsync(sandbox.Directory, new CargoBuildOptions { Locked = true }, cancellationToken: TestContext.Current.CancellationToken);
         var progress = new ConcurrentQueue<CargoProgress>();
         var reporter = new SynchronousProgress(progress.Enqueue);
-        var options = new CargoBuildOptions { Offline = true, ExpectedCrateCount = 30 };
+        var options = new CargoBuildOptions { Offline = true, Locked = true, ExpectedCrateCount = 30 };
 
         //Act
-        var result = await new CargoRunner().BuildAsync(sandbox.Directory, options, reporter, TestContext.Current.CancellationToken);
+        var result = await runner.BuildAsync(sandbox.Directory, options, reporter, TestContext.Current.CancellationToken);
 
         //Assert
+        fetch.Success.Should().BeTrue(fetch.StandardError);
         result.Success.Should().BeTrue(result.StandardError);
         result.Artifacts.Select(a => a.PackageName).Should().Contain(new[] { "serde", "clap", "anyhow", "csv" });
         var completed = progress.Where(p => p.Phase == CargoProgressPhase.CrateCompleted).Select(p => p.Completed).ToList();
@@ -562,7 +587,7 @@ public class CargoRunnerTests
         //Arrange
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(5);
-        var options = new CargoBuildOptions { AllFeatures = true, Offline = true };
+        var options = new CargoBuildOptions { AllFeatures = true, Locked = true };
 
         //Act
         var result = await new CargoRunner().TestAsync(sandbox.Directory, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -734,7 +759,7 @@ public class CargoRunnerTests
         cancellation.CancelAfter(TimeSpan.FromMilliseconds(300));
 
         //Act
-        Func<Task> act = () => new CargoRunner().BuildAsync(sandbox.Directory, new CargoBuildOptions { Offline = true }, cancellationToken: cancellation.Token);
+        Func<Task> act = () => new CargoRunner().BuildAsync(sandbox.Directory, new CargoBuildOptions { Locked = true }, cancellationToken: cancellation.Token);
 
         //Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -749,7 +774,7 @@ public class CargoRunnerTests
         using var sandbox = SampleSandbox.FromSample(2);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         cancellation.CancelAfter(TimeSpan.FromMilliseconds(300));
-        var options = new CargoBuildOptions { Offline = true, ThrowOnCancellation = false };
+        var options = new CargoBuildOptions { Locked = true, ThrowOnCancellation = false };
 
         //Act
         var result = await new CargoRunner().BuildAsync(sandbox.Directory, options, cancellationToken: cancellation.Token);
@@ -766,7 +791,7 @@ public class CargoRunnerTests
         //Arrange
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(2);
-        var options = new CargoBuildOptions { Offline = true, Timeout = TimeSpan.FromMilliseconds(300) };
+        var options = new CargoBuildOptions { Locked = true, Timeout = TimeSpan.FromMilliseconds(300) };
 
         //Act
         var result = await new CargoRunner().BuildAsync(sandbox.Directory, options, cancellationToken: TestContext.Current.CancellationToken);

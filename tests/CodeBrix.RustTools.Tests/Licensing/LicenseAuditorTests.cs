@@ -136,7 +136,7 @@ public class LicenseAuditorTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
         var strict = LicensePolicy.Permissive();
         strict.ExemptWorkspaceMembers = false;
 
@@ -160,10 +160,10 @@ public class LicenseAuditorTests
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(5);
         var project = CargoProject.Open(sandbox.Directory);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
 
         //Act
-        var report = await LicenseAuditor.AuditAsync(project, LicensePolicy.Permissive(), new CargoMetadataOptions { Offline = true }, TestContext.Current.CancellationToken);
+        var report = await LicenseAuditor.AuditAsync(project, LicensePolicy.Permissive(), new CargoMetadataOptions { Locked = true }, TestContext.Current.CancellationToken);
 
         //Assert
         report.Passed.Should().BeFalse();
@@ -180,7 +180,7 @@ public class LicenseAuditorTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(7);
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Act
         var permissive = LicenseAuditor.Audit(metadata, LicensePolicy.Permissive());

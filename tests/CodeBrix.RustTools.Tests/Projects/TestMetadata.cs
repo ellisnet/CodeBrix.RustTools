@@ -8,8 +8,8 @@ using Xunit;
 namespace CodeBrix.RustTools.Tests.Projects;
 
 /// <summary>
-/// Builds synthetic CargoMetadata graphs, and runs offline cargo metadata on sandboxed samples
-/// (skipping when cargo is missing or the local registry cache cannot satisfy the graph).
+/// Builds synthetic CargoMetadata graphs, and runs cargo metadata on sandboxed samples (skipping
+/// only when cargo is missing).
 /// </summary>
 internal static class TestMetadata
 {
@@ -72,19 +72,13 @@ internal static class TestMetadata
         };
     }
 
-    /// <summary>Runs offline cargo metadata on a sandboxed copy of a sample, or skips the test.</summary>
-    public static async Task<CargoMetadata> OfflineAsync(SampleSandbox sandbox)
+    /// <summary>Runs cargo metadata on a sandboxed copy of a sample (skipping the test when cargo
+    /// is missing). Locked: the sample's Cargo.lock is used as it is, and cargo downloads the
+    /// crates the local cache does not hold yet.</summary>
+    public static async Task<CargoMetadata> GetMetadataAsync(SampleSandbox sandbox)
     {
         CargoAvailability.SkipIfMissing();
         var project = CargoProject.Open(sandbox.Directory);
-        try
-        {
-            return await project.GetMetadataAsync(new CargoMetadataOptions { Offline = true }, TestContext.Current.CancellationToken);
-        }
-        catch (CargoCommandException ex)
-        {
-            Assert.Skip("Offline cargo metadata failed (the local registry cache does not hold this graph): " + ex.Message);
-            return null;
-        }
+        return await project.GetMetadataAsync(new CargoMetadataOptions { Locked = true }, TestContext.Current.CancellationToken);
     }
 }

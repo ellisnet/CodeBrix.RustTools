@@ -191,7 +191,7 @@ public class CargoProjectTests
         using var sandbox = SampleSandbox.FromSample(4);
 
         //Act
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Assert
         metadata.WorkspaceMembers.Should().HaveCount(3);
@@ -215,7 +215,7 @@ public class CargoProjectTests
         using var sandbox = SampleSandbox.FromSample(4);
 
         //Act
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Assert
         var core = metadata.FindPackages("unitconv_core").Single();
@@ -233,7 +233,7 @@ public class CargoProjectTests
         using var sandbox = SampleSandbox.FromSample(6);
 
         //Act
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Assert
         var package = metadata.Packages.Single();
@@ -252,7 +252,7 @@ public class CargoProjectTests
         var project = CargoProject.Open(sandbox.Directory);
 
         //Act
-        var metadata = await project.GetMetadataAsync(new CargoMetadataOptions { NoDependencies = true, Offline = true }, TestContext.Current.CancellationToken);
+        var metadata = await project.GetMetadataAsync(new CargoMetadataOptions { NoDependencies = true, Locked = true }, TestContext.Current.CancellationToken);
 
         //Assert
         metadata.HasResolve.Should().BeFalse();
@@ -267,7 +267,7 @@ public class CargoProjectTests
         using var sandbox = SampleSandbox.FromSample(10);
 
         //Act
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Assert
         metadata.GetWorkspacePackages().Single().Name.Should().Be("test_project_10");
@@ -284,7 +284,7 @@ public class CargoProjectTests
         var project = CargoProject.Open(sandbox.Directory);
 
         //Act
-        Func<Task> act = () => project.GetMetadataAsync(new CargoMetadataOptions { Offline = true }, TestContext.Current.CancellationToken);
+        Func<Task> act = () => project.GetMetadataAsync(new CargoMetadataOptions { Locked = true }, TestContext.Current.CancellationToken);
 
         //Assert
         await act.Should().ThrowAsync<CargoCommandException>();

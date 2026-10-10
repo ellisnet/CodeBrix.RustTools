@@ -26,4 +26,9 @@ public enum CargoCommand
     /// <summary><c>cargo fmt</c> - check (default) or apply rustfmt formatting (needs the
     /// rustfmt component).</summary>
     Fmt,
+
+    /// <summary><c>cargo fetch</c> - download every dependency into the local cache (for every
+    /// platform, or only <see cref="CargoBuildOptions.TargetTriple"/>'s), so later commands can
+    /// run with <see cref="CargoBuildOptions.Offline"/>. Compiles nothing.</summary>
+    Fetch,
 }

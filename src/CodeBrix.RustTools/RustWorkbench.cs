@@ -20,7 +20,7 @@ namespace CodeBrix.RustTools;
 /// The entry point of CodeBrix.RustTools: detects the Rust toolchain installed on this machine,
 /// decides whether it can build, explains how to fix it when it cannot, checks for newer Rust
 /// releases, opens Cargo projects, audits their dependency licenses, runs cargo (build, check,
-/// test, clean, doc, clippy, fmt) with typed diagnostics and progress, inspects dependency
+/// test, clean, doc, clippy, fmt, fetch) with typed diagnostics and progress, inspects dependency
 /// health, extracts and builds source archives, and runs the programs it built. The library
 /// uses the tools that are already installed and never installs or updates anything itself.
 /// </summary>
@@ -282,7 +282,9 @@ public sealed class RustWorkbench
     /// <see cref="ToolchainNotFoundException"/> with
     /// <see cref="InstallGuidanceTopic.InstallLinuxCrossTools"/> guidance when one is missing,
     /// instead of letting cargo fail with "can't find crate for `std`" or a linker error.
-    /// <c>clean</c> and <c>fmt</c> skip every check. The caller's options object is never modified.
+    /// <c>clean</c> and <c>fmt</c> skip every check. <c>fetch</c> only checks that cargo and
+    /// rustc are installed (a C toolchain is not needed to download) and skips steps (2) to (4)
+    /// and the Linux cross check. The caller's options object is never modified.
     /// </summary>
     /// <param name="project">The project (from <see cref="OpenProject"/>).</param>
     /// <param name="command">The subcommand to run.</param>
@@ -297,7 +299,8 @@ public sealed class RustWorkbench
     /// <exception cref="ArgumentNullException"><paramref name="project"/> is null.</exception>
     /// <exception cref="ToolchainNotFoundException">cargo, rustc or the C compiler / linker is
     /// not installed, or a foreign Linux target's standard library or cross tools are missing
-    /// (compiling commands only); cargo is not started.</exception>
+    /// (compiling commands only; <c>fetch</c> needs only cargo and rustc); cargo is not
+    /// started.</exception>
     /// <exception cref="LicensePolicyViolationException">The license gate failed,
     /// <see cref="CargoBuildOptions.LicenseGateMode"/> is <see cref="LicenseGateMode.Enforce"/>
     /// and <see cref="CargoBuildOptions.ThrowOnLicenseViolation"/> is true; the exception
@@ -314,9 +317,13 @@ public sealed class RustWorkbench
         LicenseAuditReport audit = null;
         ToolchainReadiness readiness = null;
 
-        if (command is not (CargoCommand.Clean or CargoCommand.Fmt))
+        if (command == CargoCommand.Fetch)
         {
-            readiness = await EnsureToolchainAsync(project, cancellationToken).ConfigureAwait(false);
+            readiness = await EnsureToolchainAsync(project, requireCCompiler: false, cancellationToken).ConfigureAwait(false);
+        }
+        else if (command is not (CargoCommand.Clean or CargoCommand.Fmt))
+        {
+            readiness = await EnsureToolchainAsync(project, requireCCompiler: true, cancellationToken).ConfigureAwait(false);
             EnsureLinuxCrossReady(project, effective, readiness.Toolchain);
 
             var estimate = !effective.ExpectedCrateCount.HasValue && (effective.LicensePolicy != null || progress != null || Progress != null);
@@ -454,6 +461,31 @@ public sealed class RustWorkbench
     /// exception carries install guidance).</exception>
     public Task<CargoCommandResult> FmtAsync(CargoProject project, CargoBuildOptions options = null, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
         => RunCargoAsync(project, CargoCommand.Fmt, options, progress, cancellationToken);
+
+    /// <summary>
+    /// Runs <c>cargo fetch</c>: downloads every dependency of the project into the local cache
+    /// (CARGO_HOME) - for every platform, or with <see cref="CargoBuildOptions.TargetTriple"/>
+    /// for that target only - so that later commands, the license gate's <c>cargo metadata</c>
+    /// included, can run with <see cref="CargoBuildOptions.Offline"/>. Compiles nothing. The
+    /// readiness check needs only cargo and rustc (no C toolchain); there is no license gate
+    /// and no crate-count estimate. Of the options only
+    /// <see cref="CargoBuildOptions.TargetTriple"/>, <see cref="CargoBuildOptions.Locked"/>,
+    /// <see cref="CargoBuildOptions.Offline"/>, <see cref="CargoBuildOptions.Frozen"/>,
+    /// <see cref="CargoBuildOptions.Verbose"/>, the environment, timeout and
+    /// <see cref="CargoBuildOptions.ExtraArguments"/> apply. Each download is a
+    /// <see cref="CargoProgressPhase.Downloading"/> report naming the crate; nothing is reported
+    /// for crates that are already cached. A failed download is a result with
+    /// <see cref="CargoCommandResult.Success"/> false and cargo's message in
+    /// <see cref="CargoCommandResult.Errors"/>, not an exception.
+    /// </summary>
+    /// <param name="project">The project (from <see cref="OpenProject"/>).</param>
+    /// <param name="options">The command options; <c>null</c> uses the defaults.</param>
+    /// <param name="progress">Receives progress reports; may be <c>null</c>.</param>
+    /// <param name="cancellationToken">Kills the cargo process tree when cancelled.</param>
+    /// <exception cref="ToolchainNotFoundException">cargo or rustc is not installed; cargo is
+    /// not started.</exception>
+    public Task<CargoCommandResult> FetchAsync(CargoProject project, CargoBuildOptions options = null, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
+        => RunCargoAsync(project, CargoCommand.Fetch, options, progress, cancellationToken);
 
     /// <summary>
     /// Runs <c>cargo metadata</c> and reports dependency health: a <c>cargo tree</c>-style
@@ -1240,16 +1272,17 @@ public sealed class RustWorkbench
         }
     }
 
-    private async Task<ToolchainReadiness> EnsureToolchainAsync(CargoProject project, CancellationToken cancellationToken)
+    private async Task<ToolchainReadiness> EnsureToolchainAsync(CargoProject project, bool requireCCompiler, CancellationToken cancellationToken)
     {
         var info = await DetectToolchainAsync(project.Directory, cancellationToken).ConfigureAwait(false);
-        var readiness = EvaluateReadiness(info);
-        var missing = readiness.MissingTools.Where(t => t is RustTool.Cargo or RustTool.Rustc or RustTool.CCompiler).ToList();
+        var readiness = EvaluateReadiness(info, new ToolchainRequirements { RequireCCompiler = requireCCompiler });
+        var missing = readiness.MissingTools.Where(t => t is RustTool.Cargo or RustTool.Rustc || (requireCCompiler && t == RustTool.CCompiler)).ToList();
         if (missing.Count > 0)
         {
             var names = missing.Select(t => t == RustTool.CCompiler ? "the C compiler / linker" : t.ToString().ToLowerInvariant());
+            var what = requireCCompiler ? "cannot be built" : "cannot have its dependencies fetched";
             throw new ToolchainNotFoundException(
-                $"{string.Join(" and ", names)} not found, so '{project.ManifestPath}' cannot be built. See Guidance for what to install.",
+                $"{string.Join(" and ", names)} not found, so '{project.ManifestPath}' {what}. See Guidance for what to install.",
                 readiness,
                 GetInstallGuidance(readiness));
         }

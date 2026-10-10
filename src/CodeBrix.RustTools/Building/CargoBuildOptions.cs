@@ -40,8 +40,9 @@ public sealed class CargoBuildOptions
     public bool NoDefaultFeatures { get; set; }
 
     /// <summary>
-    /// Workspace packages to act on (<c>-p NAME</c> each). Empty = cargo's default (the package
-    /// in the folder, or the workspace's default members).
+    /// Workspace packages to act on (<c>-p NAME</c> each; not passed to fetch, which always
+    /// fetches the whole workspace). Empty = cargo's default (the package in the folder, or the
+    /// workspace's default members).
     /// </summary>
     public IList<string> Packages { get; } = new List<string>();
 
@@ -57,7 +58,7 @@ public sealed class CargoBuildOptions
 
     /// <summary>
     /// Builds every target: lib, bins, examples, tests and benches (<c>--all-targets</c>; not
-    /// passed to doc, clean or fmt).
+    /// passed to doc, clean, fmt or fetch).
     /// </summary>
     public bool AllTargets { get; set; }
 
@@ -84,7 +85,8 @@ public sealed class CargoBuildOptions
 
     /// <summary>
     /// Never touches the network (<c>--offline</c>); every dependency must already be in the
-    /// local registry cache.
+    /// local registry cache - run <c>FetchAsync</c> (<see cref="CargoCommand.Fetch"/>) first to
+    /// put it there.
     /// </summary>
     public bool Offline { get; set; }
 

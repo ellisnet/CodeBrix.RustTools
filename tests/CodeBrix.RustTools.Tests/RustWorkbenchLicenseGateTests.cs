@@ -13,8 +13,8 @@ namespace CodeBrix.RustTools.Tests;
 
 /// <summary>
 /// The license gate of <see cref="RustWorkbench"/>: cargo metadata + audit before cargo runs.
-/// Every test works on a sandboxed copy of a sample and runs cargo metadata offline (skipping
-/// when the local registry cache cannot satisfy the graph).
+/// Every test works on a sandboxed copy of a sample and runs cargo with Locked (the sample's
+/// Cargo.lock as it is; crates missing from the local cache are downloaded).
 /// </summary>
 public class RustWorkbenchLicenseGateTests
 {
@@ -30,10 +30,10 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = StrictPermissive() };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = StrictPermissive() };
 
         //Act
         var act = () => workbench.BuildAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -52,10 +52,10 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = StrictPermissive(), ThrowOnLicenseViolation = false };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = StrictPermissive(), ThrowOnLicenseViolation = false };
 
         //Act
         var result = await workbench.BuildAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -75,10 +75,10 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = StrictPermissive(), ThrowOnLicenseViolation = false };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = StrictPermissive(), ThrowOnLicenseViolation = false };
 
         //Act
         var result = await workbench.TestAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -96,11 +96,11 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
         var policy = StrictPermissive().Override("unitconv_report", "internal tool, never distributed");
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy };
 
         //Act
         var result = await workbench.BuildAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -118,12 +118,12 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
         var policy = LicensePolicy.Permissive();
         policy.UnresolvedLicenseHandling = UnresolvedLicenseHandling.Reject;
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy, ThrowOnLicenseViolation = false };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy, ThrowOnLicenseViolation = false };
 
         //Act
         var result = await workbench.CheckAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -139,12 +139,12 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
         var policy = LicensePolicy.Permissive();
         policy.UnresolvedLicenseHandling = UnresolvedLicenseHandling.Allow;
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy };
         var progress = new CollectingProgress();
 
         //Act
@@ -166,10 +166,10 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = StrictPermissive(), LicenseGateMode = LicenseGateMode.ReportOnly };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = StrictPermissive(), LicenseGateMode = LicenseGateMode.ReportOnly };
         var progress = new CollectingProgress();
 
         //Act
@@ -195,12 +195,12 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
         var policy = LicensePolicy.Permissive();
         policy.UnresolvedLicenseHandling = UnresolvedLicenseHandling.Allow;
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy, LicenseGateMode = LicenseGateMode.ReportOnly };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy, LicenseGateMode = LicenseGateMode.ReportOnly };
         var progress = new CollectingProgress();
 
         //Act
@@ -217,12 +217,12 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
         var policy = LicensePolicy.Permissive();
         policy.UnresolvedLicenseHandling = UnresolvedLicenseHandling.Reject;
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy, LicenseGateMode = LicenseGateMode.ReportOnly, ThrowOnLicenseViolation = true };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy, LicenseGateMode = LicenseGateMode.ReportOnly, ThrowOnLicenseViolation = true };
 
         //Act
         var result = await workbench.TestAsync(project, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -239,12 +239,12 @@ public class RustWorkbenchLicenseGateTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
 
         //Act
-        var report = await workbench.AuditLicensesAsync(project, LicensePolicy.Permissive(), new CargoMetadataOptions { Offline = true }, TestContext.Current.CancellationToken);
+        var report = await workbench.AuditLicensesAsync(project, LicensePolicy.Permissive(), new CargoMetadataOptions { Locked = true }, TestContext.Current.CancellationToken);
 
         //Assert
         report.Passed.Should().BeFalse();

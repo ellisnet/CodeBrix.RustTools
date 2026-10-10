@@ -37,7 +37,9 @@ Feature areas:
     no shared folders - skipping .git, target, node_modules and your own
     patterns.
   - Cargo inside the container: build, check, test, doc, clippy, fmt and
-    clean with --message-format=json, returning the SIBLING package's
+    clean with --message-format=json (and fetch, which downloads the
+    dependencies into the container's cargo cache volume without
+    compiling), returning the SIBLING package's
     result model unchanged (CargoCommandResult, CargoTestResult,
     CompilerDiagnostic, BuildArtifact, CargoProgress), with cancellation
     that kills every compiler process in the container.

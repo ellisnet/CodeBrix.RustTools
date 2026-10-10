@@ -162,7 +162,7 @@ public class DependencyInspectorTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(2);
-        var metadata = await TestMetadata.OfflineAsync(sandbox);
+        var metadata = await TestMetadata.GetMetadataAsync(sandbox);
 
         //Act
         var inspector = new DependencyInspector(metadata);

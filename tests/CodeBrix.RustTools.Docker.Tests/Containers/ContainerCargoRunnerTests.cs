@@ -24,6 +24,22 @@ public class ContainerCargoRunnerTests
     }
 
     [Fact]
+    public void CreateInvocation_fetches_for_a_cross_target_without_build_flags()
+    {
+        //Arrange
+        var options = new CargoBuildOptions { Profile = CargoProfile.Release, Locked = true, Jobs = 2 };
+        options.Packages.Add("unitconv_cli");
+
+        //Act
+        var invocation = ContainerCargoRunner.CreateInvocation(CargoCommand.Fetch, options, CrossTarget.LinuxArm64, "/work", "x86_64-unknown-linux-gnu");
+
+        //Assert
+        invocation.Command.Should().Be(CargoCommand.Fetch);
+        invocation.CargoArguments.Should().Equal("fetch", "--target", "aarch64-unknown-linux-gnu", "--locked");
+        invocation.CommandLine.Should().Equal("setsid", "-w", "cargo", "fetch", "--target", "aarch64-unknown-linux-gnu", "--locked");
+    }
+
+    [Fact]
     public void CreateInvocation_sets_the_container_environment_and_a_unique_marker()
     {
         //Act

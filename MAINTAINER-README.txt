@@ -250,13 +250,32 @@ Prerequisites and gating:
     and are dynamically skipped (Assert.Skip) when cargo is not on PATH or in
     ~/.cargo/bin. They never install anything (every process runs with
     RUSTUP_AUTO_INSTALL=0).
-  * Tests that need `cargo metadata` run it with --offline first
-    (TestMetadata.OfflineAsync) and skip when the local registry cache cannot
-    satisfy the sample's lockfile. The cargo builds use Offline where the
-    sample has registry dependencies.
-  * Tests that reach static.rust-lang.org or crates.io are skipped unless
+  * Tests that run cargo on a sample with registry dependencies use Locked
+    (the sample's Cargo.lock exactly as it is) and NOT Offline, so cargo
+    downloads whatever the local cache (CARGO_HOME) does not hold yet. On
+    a machine with a cold cache the first run downloads the crates of
+    samples 02, 04, 05 and 07 (about 50) from crates.io; later runs find
+    them cached. They never skip for a cold cache. TestMetadata
+    .GetMetadataAsync is the shared `cargo metadata` call (Locked, skips
+    only when cargo is missing).
+  * Offline itself is covered by tests that fill the cache first:
+    CargoRunnerTests.BuildAsync_builds_real_dependencies_offline_... runs
+    FetchAsync and then an Offline build, and RustWorkbenchFetchTests
+    fetches sample 02 into an EMPTY CARGO_HOME of its own (a short folder
+    under the system temp folder, deleted afterwards) and then runs
+    `cargo metadata` offline against it - so it proves the fetch even
+    when the machine's cache is warm, at the cost of downloading sample
+    02's crates (about 30) on every run.
+  * To check the suite against a cold cache without emptying your own,
+    run it with CARGO_HOME pointing at an empty folder (for example
+    `CARGO_HOME=/tmp/empty-cargo-home dotnet test --project
+    tests/CodeBrix.RustTools.Tests/CodeBrix.RustTools.Tests.csproj`);
+    rustup still finds the toolchains through RUSTUP_HOME.
+  * The library's OWN requests to static.rust-lang.org and crates.io
+    (RustReleaseClient, CratesIoClient) are tested live only when
     CODEBRIX_RUSTTOOLS_LIVE_TESTS=1. Everything else uses
-    StubHttpMessageHandler and the files in Fixtures/.
+    StubHttpMessageHandler and the files in Fixtures/. (cargo's crate
+    downloads above are not gated by that variable.)
   * The process-runner tests use /bin/sh and skip on Windows; the
     process-tree kill test reads /proc and runs on Linux only.
   * RustWorkbenchMacOSUniversalTests run on a Mac: the universal build of
@@ -504,7 +523,9 @@ NOTES
     /usr/bin/cc is a stub that opens an installer dialog when the Command Line
     Tools are missing.
   - RustWorkbench's compiling commands run a readiness check first (cargo,
-    rustc AND the C toolchain must not be Missing; Unknown only warns) and,
+    rustc AND the C toolchain must not be Missing; Unknown only warns;
+    FetchAsync / CargoCommand.Fetch needs only cargo and rustc and skips the
+    metadata call, the license gate and the Linux cross check) and,
     with a LicensePolicy, run `cargo metadata` with the build's Offline /
     Locked / Frozen / feature flags before cargo. Detection is cached per
     workbench, keyed by the project folder plus the path and content of the

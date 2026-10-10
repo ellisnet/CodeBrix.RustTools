@@ -146,11 +146,11 @@ public class RustWorkbenchBuildTests
         //Arrange
         CargoAvailability.SkipIfMissing();
         using var sandbox = SampleSandbox.FromSample(4);
-        var everyPlatform = await TestMetadata.OfflineAsync(sandbox);
+        var everyPlatform = await TestMetadata.GetMetadataAsync(sandbox);
         var workbench = new RustWorkbench();
         var progress = new CollectingProgress();
         var project = workbench.OpenProject(sandbox.Directory);
-        var options = new CargoBuildOptions { Offline = true };
+        var options = new CargoBuildOptions { Locked = true };
 
         //Act
         var result = await workbench.BuildAsync(project, options, progress, TestContext.Current.CancellationToken);
@@ -230,12 +230,12 @@ public class RustWorkbenchBuildTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(5);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var workbench = new RustWorkbench();
         var project = workbench.OpenProject(sandbox.Directory);
 
         //Act
-        var report = await workbench.InspectDependenciesAsync(project, metadataOptions: new CargoMetadataOptions { Offline = true }, cancellationToken: TestContext.Current.CancellationToken);
+        var report = await workbench.InspectDependenciesAsync(project, metadataOptions: new CargoMetadataOptions { Locked = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         //Assert
         report.Metadata.Should().NotBeNull();
@@ -252,13 +252,13 @@ public class RustWorkbenchBuildTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(2);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var handler = new StubHttpMessageHandler();
         var workbench = new RustWorkbench(new RustWorkbenchOptions { HttpMessageHandler = handler, CratesIoRequestInterval = TimeSpan.Zero });
         var project = workbench.OpenProject(sandbox.Directory);
 
         //Act
-        var report = await workbench.InspectDependenciesAsync(project, true, new CargoMetadataOptions { Offline = true }, TestContext.Current.CancellationToken);
+        var report = await workbench.InspectDependenciesAsync(project, true, new CargoMetadataOptions { Locked = true }, TestContext.Current.CancellationToken);
 
         //Assert
         report.OutdatedChecked.Should().BeTrue();

@@ -58,7 +58,7 @@ public class RustWorkbenchArchiveTests
         var archive = Path.Combine(SandboxParent(sandbox), "sample.zip");
         ZipFile.CreateFromDirectory(sandbox.Directory, archive, CompressionLevel.Fastest, includeBaseDirectory: true);
         var destination = Path.Combine(SandboxParent(sandbox), "extracted");
-        var result = await new RustWorkbench().ExtractAndBuildAsync(archive, destination, new CargoBuildOptions { Offline = true }, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await new RustWorkbench().ExtractAndBuildAsync(archive, destination, new CargoBuildOptions { Locked = true }, cancellationToken: TestContext.Current.CancellationToken);
         result.Source.DeleteOnDispose = true;
 
         //Act
@@ -74,7 +74,7 @@ public class RustWorkbenchArchiveTests
     {
         //Arrange
         using var sandbox = SampleSandbox.FromSample(4);
-        await TestMetadata.OfflineAsync(sandbox);
+        CargoAvailability.SkipIfMissing();
         var archive = Path.Combine(SandboxParent(sandbox), "test_project_04-main.tar.gz");
         using (var file = File.Create(archive))
         using (var compressed = new GZipStream(file, CompressionLevel.Fastest))
@@ -85,7 +85,7 @@ public class RustWorkbenchArchiveTests
         var destination = Path.Combine(SandboxParent(sandbox), "extracted");
         var policy = LicensePolicy.Permissive();
         policy.ExemptWorkspaceMembers = false;
-        var options = new CargoBuildOptions { Offline = true, LicensePolicy = policy, ThrowOnLicenseViolation = false };
+        var options = new CargoBuildOptions { Locked = true, LicensePolicy = policy, ThrowOnLicenseViolation = false };
 
         //Act
         using var result = await new RustWorkbench().ExtractAndBuildAsync(archive, destination, options, cancellationToken: TestContext.Current.CancellationToken);
@@ -155,7 +155,7 @@ public class RustWorkbenchArchiveTests
         var archiveOptions = new SourceArchiveOptions { MaxEntryCount = 1000, StripSingleRootFolder = false };
 
         //Act
-        using var result = await new RustWorkbench().ExtractAndBuildAsync(archive, destination, archiveOptions, new CargoBuildOptions { Offline = true }, cancellationToken: TestContext.Current.CancellationToken);
+        using var result = await new RustWorkbench().ExtractAndBuildAsync(archive, destination, archiveOptions, new CargoBuildOptions { Locked = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         //Assert
         result.Success.Should().BeTrue(result.Build.StandardError);

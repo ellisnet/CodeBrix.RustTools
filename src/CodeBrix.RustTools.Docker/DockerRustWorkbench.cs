@@ -379,6 +379,8 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <see cref="CargoMetadata.GetBuildClosure"/>). Without a policy the metadata call is
     /// made only when <paramref name="progress"/> is supplied (the total only feeds progress),
     /// and a failed <c>cargo metadata</c> then only leaves the total unknown.
+    /// <see cref="CargoCommand.Fetch"/> downloads the dependencies into the container's cargo
+    /// cache volume with no metadata call and no license gate.
     /// </summary>
     /// <param name="container">A running container whose <c>/work</c> holds the project (see
     /// <see cref="CopySourceAsync"/>).</param>
@@ -426,7 +428,7 @@ public sealed class DockerRustWorkbench : IDisposable
         LicenseAuditReport audit = null;
         var wantEstimate = !effective.ExpectedCrateCount.HasValue;
         var fetchForEstimate = wantEstimate && (progress != null || HasProgressListeners);
-        if ((effective.LicensePolicy != null || fetchForEstimate) && command is not (CargoCommand.Clean or CargoCommand.Fmt))
+        if ((effective.LicensePolicy != null || fetchForEstimate) && command is not (CargoCommand.Clean or CargoCommand.Fmt or CargoCommand.Fetch))
         {
             var metadataOptions = RustWorkbench.ToMetadataOptions(effective, CrateCountEstimator.FilterPlatformFor(CrossTargetInfo.Get(target).Triple));
             var metadata = effective.LicensePolicy != null
