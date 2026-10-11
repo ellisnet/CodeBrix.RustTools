@@ -58,6 +58,18 @@ public sealed class BuildContainerOptions
     public string TargetVolumeName { get; set; }
 
     /// <summary>
+    /// Whether the container runs without a network. <c>true</c> sets the container's network
+    /// mode to <c>none</c> (it gets only a loopback interface), so nothing inside it - cargo, a
+    /// build script, a proc macro - can reach a registry or any other host. Default
+    /// <c>false</c>. The pattern: run <c>cargo fetch</c> (<see cref="Building.CargoCommand.Fetch"/>)
+    /// in a networked container, then build with <see cref="Building.CargoBuildOptions.Offline"/>
+    /// in a network-less one that shares the same cargo cache volume
+    /// (<see cref="DockerRustWorkbenchOptions.CacheVolumeName"/>). A network-less container is
+    /// never reused for a networked request, nor the other way round.
+    /// </summary>
+    public bool NetworkDisabled { get; set; }
+
+    /// <summary>
     /// Returns a copy of these options (collections are copied; mount and limit objects are
     /// shared).
     /// </summary>
@@ -72,5 +84,6 @@ public sealed class BuildContainerOptions
         ResourceLimits = ResourceLimits,
         Mounts = Mounts == null ? new List<MountSpec>() : Mounts.ToList(),
         TargetVolumeName = TargetVolumeName,
+        NetworkDisabled = NetworkDisabled,
     };
 }

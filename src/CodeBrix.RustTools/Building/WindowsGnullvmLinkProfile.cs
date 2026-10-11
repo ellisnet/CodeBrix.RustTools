@@ -113,8 +113,9 @@ public sealed class WindowsGnullvmLinkProfile
     /// <summary>
     /// The environment variables that apply the profile to a target, in a fixed order:
     /// <c>CC_</c>, <c>CXX_</c>, <c>AR_</c>, <c>RANLIB_</c> (for the <c>cc</c> crate),
-    /// <c>CARGO_TARGET_&lt;T&gt;_LINKER</c>, <c>CARGO_TARGET_&lt;T&gt;_AR</c> and
-    /// <c>CARGO_TARGET_&lt;T&gt;_RUSTFLAGS</c> (<see cref="RustFlags"/>).
+    /// <c>CARGO_TARGET_&lt;T&gt;_LINKER</c>, <c>CARGO_TARGET_&lt;T&gt;_AR</c>,
+    /// <c>CARGO_TARGET_&lt;T&gt;_RUSTFLAGS</c> (<see cref="RustFlags"/>) and
+    /// <c>BINDGEN_EXTRA_CLANG_ARGS_&lt;triple&gt;</c> (<see cref="BindgenClangArguments"/>).
     /// </summary>
     /// <param name="triple">One of <see cref="Triples"/>.</param>
     /// <exception cref="ArgumentException"><paramref name="triple"/> is not a Windows gnullvm target.</exception>
@@ -134,8 +135,30 @@ public sealed class WindowsGnullvmLinkProfile
             ["CARGO_TARGET_" + upper + "_LINKER"] = clang,
             ["CARGO_TARGET_" + upper + "_AR"] = ArchiverPath,
             ["CARGO_TARGET_" + upper + "_RUSTFLAGS"] = RustFlags,
+            ["BINDGEN_EXTRA_CLANG_ARGS_" + lower] = BindgenClangArguments(normalized),
         };
     }
+
+    /// <summary>
+    /// The llvm-mingw installation folder: the parent of <see cref="BinDirectory"/>. Its
+    /// <c>&lt;machine&gt;-w64-mingw32</c> folders hold the mingw-w64 headers and libraries.
+    /// </summary>
+    public string SysrootDirectory => AndroidLinkProfile.Sibling(BinDirectory, string.Empty).TrimEnd('/', '\\');
+
+    /// <summary>
+    /// The extra libclang arguments a <c>bindgen</c> build script needs for a target, as
+    /// <see cref="EnvironmentFor"/> puts them in <c>BINDGEN_EXTRA_CLANG_ARGS_&lt;triple&gt;</c>:
+    /// the mingw clang target (<c>--target=x86_64-w64-mingw32</c>, what llvm-mingw's own clang
+    /// wrappers use) and <see cref="SysrootDirectory"/>, so libclang finds the mingw-w64 headers.
+    /// Only the per-target variable is set, never the plain <c>BINDGEN_EXTRA_CLANG_ARGS</c>,
+    /// which would also reach the build scripts compiled for the host. (bindgen itself needs
+    /// libclang on the building machine - in a container, add <c>libclang-dev</c> to the
+    /// image's apt packages.)
+    /// </summary>
+    /// <param name="triple">One of <see cref="Triples"/>.</param>
+    /// <exception cref="ArgumentException"><paramref name="triple"/> is not a Windows gnullvm target.</exception>
+    public string BindgenClangArguments(string triple)
+        => "--target=" + MachineOf(triple) + "-w64-mingw32 --sysroot=" + AndroidLinkProfile.BindgenPath(SysrootDirectory);
 
     /// <summary>
     /// Applies the profile to build options: sets <see cref="CargoBuildOptions.TargetTriple"/>

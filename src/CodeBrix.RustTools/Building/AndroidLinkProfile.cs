@@ -11,7 +11,9 @@ namespace CodeBrix.RustTools.Building;
 /// target triple and an API level, the <c>clang</c> wrapper becomes cargo's linker
 /// (<c>CARGO_TARGET_&lt;TRIPLE&gt;_LINKER</c>) and the <c>cc</c> crate's compiler
 /// (<c>CC_&lt;triple&gt;</c>, <c>CXX_&lt;triple&gt;</c>), and <c>llvm-ar</c> the archiver
-/// (<c>AR_&lt;triple&gt;</c>, <c>RANLIB_&lt;triple&gt;</c>, <c>CARGO_TARGET_&lt;TRIPLE&gt;_AR</c>).
+/// (<c>AR_&lt;triple&gt;</c>, <c>RANLIB_&lt;triple&gt;</c>, <c>CARGO_TARGET_&lt;TRIPLE&gt;_AR</c>),
+/// and <c>BINDGEN_EXTRA_CLANG_ARGS_&lt;triple&gt;</c> gives a <c>bindgen</c> build script the
+/// API-versioned clang target and the NDK sysroot (<see cref="BindgenClangArguments"/>).
 /// These are the variables <c>cargo ndk</c> sets; cargo runs directly, so its JSON messages
 /// (diagnostics, artifacts, progress) are not lost. The same type drives the Android layer of
 /// CodeBrix.RustTools.Docker, so a container and a host set identical variables.
@@ -174,7 +176,60 @@ public sealed class AndroidLinkProfile
             ["RANLIB_" + lower] = RanlibPath,
             ["CARGO_TARGET_" + upper + "_LINKER"] = ClangPath(normalized),
             ["CARGO_TARGET_" + upper + "_AR"] = ArchiverPath,
+            ["BINDGEN_EXTRA_CLANG_ARGS_" + lower] = BindgenClangArguments(normalized),
         };
+    }
+
+    /// <summary>
+    /// The NDK's sysroot (the C library headers and libraries every Android target shares): the
+    /// <c>sysroot</c> folder next to <see cref="ToolchainBinDirectory"/>.
+    /// </summary>
+    public string SysrootDirectory => Sibling(ToolchainBinDirectory, "sysroot");
+
+    /// <summary>
+    /// The extra libclang arguments a <c>bindgen</c> build script needs for a target, as
+    /// <see cref="EnvironmentFor"/> puts them in <c>BINDGEN_EXTRA_CLANG_ARGS_&lt;triple&gt;</c>:
+    /// the API-versioned clang target (<c>--target=aarch64-linux-android24</c>; recent NDKs
+    /// refuse an unversioned Android triple with "Unversioned target triples are not
+    /// supported") and the NDK sysroot. Only the per-target variable is set, never the plain
+    /// <c>BINDGEN_EXTRA_CLANG_ARGS</c>, which would also reach the build scripts compiled for
+    /// the host.
+    /// </summary>
+    /// <param name="triple">One of <see cref="Triples"/>.</param>
+    /// <exception cref="ArgumentException"><paramref name="triple"/> is not an Android target.</exception>
+    public string BindgenClangArguments(string triple)
+    {
+        var normalized = Normalize(triple);
+        if (!IsAndroidTriple(normalized))
+        {
+            throw NotAndroid(triple);
+        }
+
+        return "--target=" + normalized + ApiLevel.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + " --sysroot=" + BindgenPath(SysrootDirectory);
+    }
+
+    /// <summary>
+    /// A path in the form bindgen's shell-style splitting of <c>BINDGEN_EXTRA_CLANG_ARGS</c>
+    /// keeps intact: forward slashes (a backslash would be read as an escape; clang accepts
+    /// forward slashes on Windows too), double-quoted when it contains a space.
+    /// </summary>
+    internal static string BindgenPath(string path)
+    {
+        var forward = (path ?? string.Empty).Replace('\\', '/');
+        return forward.IndexOfAny(new[] { ' ', '\t', '"', '\'' }) >= 0
+            ? "\"" + forward.Replace("\"", "\\\"") + "\""
+            : forward;
+    }
+
+    /// <summary>The folder next to <paramref name="directory"/> called <paramref name="name"/>,
+    /// joined with the directory's own separator.</summary>
+    internal static string Sibling(string directory, string name)
+    {
+        var trimmed = directory.TrimEnd('/', '\\');
+        var cut = trimmed.LastIndexOfAny(new[] { '/', '\\' });
+        var separator = trimmed.Contains('\\') && !trimmed.Contains('/') ? "\\" : "/";
+        return cut < 0 ? name : trimmed.Substring(0, cut) + separator + name;
     }
 
     /// <summary>

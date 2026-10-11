@@ -199,6 +199,34 @@ public class ContainerBuildLiveTests
     }
 
     [Fact]
+    public async Task NetworkDisabled_container_cannot_reach_a_host_but_builds_offline_from_the_shared_cache()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.FromSample(2);
+        var client = Workbench.Client;
+        await using (var networked = await Workbench.StartContainerAsync(_fixture.BaseImage, null, TestContext.Current.CancellationToken))
+        {
+            await Workbench.CopySourceAsync(networked, sandbox.Directory, null, null, TestContext.Current.CancellationToken);
+            var fetch = await Workbench.RunCargoAsync(networked, CargoCommand.Fetch, new CargoBuildOptions { Locked = true }, _fixture.NativeTarget, null, TestContext.Current.CancellationToken);
+            fetch.Success.Should().BeTrue(fetch.StandardError);
+        }
+
+        await using var isolated = await Workbench.StartContainerAsync(_fixture.BaseImage, new BuildContainerOptions { NetworkDisabled = true }, TestContext.Current.CancellationToken);
+        await Workbench.CopySourceAsync(isolated, sandbox.Directory, null, null, TestContext.Current.CancellationToken);
+
+        //Act
+        var lookup = await ContainerCommandRunner.RunAsync(client, isolated.Id, new[] { "sh", "-c", "cat /etc/resolv.conf; getent hosts crates.io" }, "/", null, TestContext.Current.CancellationToken);
+        var interfaces = await ContainerCommandRunner.RunAsync(client, isolated.Id, new[] { "ls", "/sys/class/net" }, "/", null, TestContext.Current.CancellationToken);
+        var build = await Workbench.RunCargoAsync(isolated, CargoCommand.Build, new CargoBuildOptions { Locked = true, Offline = true }, _fixture.NativeTarget, null, TestContext.Current.CancellationToken);
+
+        //Assert
+        lookup.Succeeded.Should().BeFalse("a network-less container must not resolve crates.io: " + lookup.StandardOutput);
+        interfaces.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Should().Equal("lo");
+        build.Success.Should().BeTrue(build.StandardError);
+        build.RunnableArtifacts.Should().Contain(a => a.TargetName == "test_project_02");
+    }
+
+    [Fact]
     public async Task BuildAsync_license_gate_throws_for_the_gpl_member_of_sample_04()
     {
         //Arrange

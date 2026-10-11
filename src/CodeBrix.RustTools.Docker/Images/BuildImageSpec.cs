@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using CodeBrix.RustTools.Docker.Engine;
 
@@ -79,6 +80,54 @@ public sealed class BuildImageSpec
     public bool RefreshBaseImage { get; set; }
 
     /// <summary>
+    /// A Containerfile (Dockerfile) on this machine to build the base image from, instead of
+    /// pulling <see cref="BaseImage"/>: "bring your own image". Use it for a base the generated
+    /// layers cannot make - a non-Debian distribution such as manylinux / AlmaLinux (whose
+    /// packages come from <c>dnf</c>, not <c>apt</c>), pinned system toolchains, cross sysroots.
+    /// <c>null</c> (the default) pulls <see cref="BaseImage"/>.
+    /// <para>
+    /// The image is built through the engine's CLI (CodeBrix.Docker's image build: <c>docker
+    /// build</c>, or <c>podman build</c> when <see cref="CodeBrix.Docker.DockerClientOptions.DockerCliPath"/>
+    /// is <c>podman</c>), tagged <c>&lt;ImageName&gt;:containerfile-&lt;hash&gt;</c> and labelled
+    /// like every image the workbench builds. The hash covers the Containerfile's bytes,
+    /// <see cref="ContainerfileBuildArgs"/> and every file in <see cref="ContainerfileContext"/>,
+    /// so a second <see cref="DockerRustWorkbench.EnsureImageAsync"/> reuses the image until one of
+    /// them changes (files a <c>.dockerignore</c> excludes still count: changing one causes a
+    /// rebuild that was not strictly needed, never a stale image). With
+    /// <see cref="RefreshBaseImage"/> it is rebuilt every time, pulling its <c>FROM</c> image
+    /// afresh.
+    /// </para>
+    /// <para>
+    /// Two ways to use it: (1) as the COMPLETE build image, when the Containerfile installs Rust
+    /// itself (rustup with <c>CARGO_HOME=/usr/local/cargo</c>, as in the official <c>rust</c>
+    /// image, so the cargo cache volume mounted at <c>/usr/local/cargo/registry</c> is cargo's
+    /// registry) and the spec adds no layers; (2) as the base of the generated layers, when it does
+    /// (<see cref="RustVersion"/> and <see cref="InstallClippyRustfmt"/> then need rustup in the
+    /// image, <see cref="AptPackages"/> and the cross-target layers need a Debian-based image).
+    /// <see cref="BaseImage"/> and <see cref="Tag"/> must be left unset.
+    /// </para>
+    /// </summary>
+    public string Containerfile { get; set; }
+
+    /// <summary>
+    /// The build context folder of <see cref="Containerfile"/> (what its <c>COPY</c> and
+    /// <c>ADD</c> instructions read). <c>null</c> (the default) means the Containerfile's own
+    /// folder.
+    /// </summary>
+    public string ContainerfileContext { get; set; }
+
+    /// <summary>
+    /// Build arguments for <see cref="Containerfile"/> (its <c>ARG</c> values, passed as
+    /// <c>--build-arg name=value</c>). Part of the image hash.
+    /// </summary>
+    public IDictionary<string, string> ContainerfileBuildArgs { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether <see cref="Containerfile"/> is set.
+    /// </summary>
+    public bool UsesContainerfile => !string.IsNullOrWhiteSpace(Containerfile);
+
+    /// <summary>
     /// The base image reference, <c>&lt;BaseImage&gt;:&lt;Tag&gt;</c>, using the library defaults
     /// (<c>rust:latest</c>) for unset parts.
     /// </summary>
@@ -111,6 +160,11 @@ public sealed class BuildImageSpec
         ExtraDockerfileLines = ExtraDockerfileLines == null ? new List<string>() : ExtraDockerfileLines.ToList(),
         ImageName = ImageName,
         RefreshBaseImage = RefreshBaseImage,
+        Containerfile = Containerfile,
+        ContainerfileContext = ContainerfileContext,
+        ContainerfileBuildArgs = ContainerfileBuildArgs == null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(ContainerfileBuildArgs, StringComparer.Ordinal),
     };
 
     /// <summary>
@@ -120,12 +174,12 @@ public sealed class BuildImageSpec
     internal BuildImageSpec WithDefaults(DockerRustWorkbenchOptions options)
     {
         var copy = Clone();
-        if (string.IsNullOrWhiteSpace(copy.BaseImage))
+        if (string.IsNullOrWhiteSpace(copy.BaseImage) && !copy.UsesContainerfile)
         {
             copy.BaseImage = options.DefaultImage;
         }
 
-        if (string.IsNullOrWhiteSpace(copy.Tag))
+        if (string.IsNullOrWhiteSpace(copy.Tag) && !copy.UsesContainerfile)
         {
             copy.Tag = options.DefaultTag;
         }
@@ -150,6 +204,56 @@ public sealed class BuildImageSpec
             .ToList();
         return copy;
     }
+
+    /// <summary>
+    /// Checks the Containerfile settings (nothing to check when <see cref="Containerfile"/> is
+    /// unset).
+    /// </summary>
+    /// <exception cref="ArgumentException"><see cref="BaseImage"/> or <see cref="Tag"/> is set
+    /// together with a Containerfile, or a build argument has an invalid name.</exception>
+    /// <exception cref="FileNotFoundException">The Containerfile does not exist.</exception>
+    /// <exception cref="DirectoryNotFoundException">The context folder does not exist.</exception>
+    internal void ValidateContainerfile()
+    {
+        if (!UsesContainerfile)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(BaseImage) || !string.IsNullOrWhiteSpace(Tag))
+        {
+            throw new ArgumentException("BaseImage and Tag must be left unset when Containerfile is set: the Containerfile's FROM decides the base.", nameof(Containerfile));
+        }
+
+        var path = Path.GetFullPath(Containerfile);
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"The Containerfile '{path}' does not exist.", path);
+        }
+
+        var context = ResolveContainerfileContext();
+        if (!Directory.Exists(context))
+        {
+            throw new DirectoryNotFoundException($"The Containerfile build context '{context}' does not exist.");
+        }
+
+        if (ContainerfileBuildArgs != null)
+        {
+            foreach (var name in ContainerfileBuildArgs.Keys)
+            {
+                if (string.IsNullOrWhiteSpace(name) || name.Contains('=') || name.Any(char.IsWhiteSpace))
+                {
+                    throw new ArgumentException($"'{name}' is not a valid build argument name.", nameof(ContainerfileBuildArgs));
+                }
+            }
+        }
+    }
+
+    /// <summary>The full path of the Containerfile's build context folder.</summary>
+    internal string ResolveContainerfileContext()
+        => Path.GetFullPath(string.IsNullOrWhiteSpace(ContainerfileContext)
+            ? Path.GetDirectoryName(Path.GetFullPath(Containerfile))
+            : ContainerfileContext);
 
     internal static void ThrowIfNull(BuildImageSpec spec)
     {

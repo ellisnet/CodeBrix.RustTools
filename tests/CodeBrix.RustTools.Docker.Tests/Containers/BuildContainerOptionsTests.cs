@@ -21,6 +21,7 @@ public class BuildContainerOptionsTests
         options.Mounts.Should().BeEmpty();
         options.ResourceLimits.Should().BeNull();
         options.TargetVolumeName.Should().BeNull();
+        options.NetworkDisabled.Should().BeFalse();
     }
 
     [Fact]
@@ -39,5 +40,18 @@ public class BuildContainerOptionsTests
         copy.KeepOnDispose.Should().Be(true);
         options.Env.Should().HaveCount(1);
         options.Mounts.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Clone_copies_NetworkDisabled()
+    {
+        //Arrange
+        var options = new BuildContainerOptions { NetworkDisabled = true };
+
+        //Act
+        var copy = options.Clone();
+
+        //Assert
+        copy.NetworkDisabled.Should().BeTrue();
     }
 }

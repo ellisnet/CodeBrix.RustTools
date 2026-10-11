@@ -532,6 +532,45 @@ NOTES
     toolchain file that applies to it (RustWorkbench.ToolchainCacheKey);
     tests replace the detector and the clock through the internal
     constructor and Clock property.
+  - Streaming exec under Podman (2026-10-10): RunCargoAsync lost most of
+    cargo's JSON lines over the Podman API socket because CodeBrix.Docker
+    1.0.283.404 decoded a non-TTY exec as raw bytes whenever the daemon
+    answered Content-Type application/vnd.docker.raw-stream - which Podman
+    (and Docker before API 1.42) does for framed streams too - so stdcopy
+    frame headers landed inside the lines. Fixed IN CodeBrix.Docker
+    (ContainerExecStream follows the Tty flag), published as CodeBrix.Docker
+    1.0.284.250, which RustTools.Docker now pins. RustTools.Docker needed no
+    code change, only that package bump;
+    DockerRustWorkbenchLiveTests.RunStreamingAsync_delivers_every_line_* fence
+    the path (5000 lines in order, interleaved stderr, 64 KB lines). The live
+    suite runs on the default engine (DOCKER_HOST, else
+    /var/run/docker.sock); to try Podman, start `podman system service
+    --time=0 unix://<socket>` and set DOCKER_HOST to it.
+  - BuildContainerOptions.NetworkDisabled maps to ContainerSpec.NetworkMode
+    "none" and is part of the reuse key (a network-less container is never
+    handed out for a networked request). The intended flow is fetch in a
+    networked container, build Offline in a network-less one on the same
+    cargo cache volume (ContainerBuildLiveTests.NetworkDisabled_*).
+  - Images: the generated layers are Debian/apt-based and are built with the
+    docker CLI (CodeBrix.Docker's ImageOperations.BuildAsync runs `docker
+    build`, BuildKit/buildx). A non-Debian base (manylinux + dnf) is the
+    BuildImageSpec.Containerfile route: the workbench builds the consumer's
+    own Containerfile through the same CLI build (DockerfilePath, BuildArgs,
+    labels), tags it <ImageName>:containerfile-<hash> (ContainerfileImage:
+    SHA-256 over the Containerfile bytes, the sorted build args and every
+    context file, links by target and never followed) and uses it whole or
+    as the FROM of the generated layers. With Podman and no docker CLI,
+    DockerClientOptions.DockerCliPath = "podman" builds into the storage the
+    API socket serves (verified 2026-10-10). CodeBrix.Docker has no
+    daemon-side POST /build; adding one would remove the CLI requirement.
+    The WebGpu repo's wgpu-native-tools/linux/Containerfile.x86_64 is the
+    real-world consumer.
+  - bindgen: AndroidLinkProfile and WindowsGnullvmLinkProfile add
+    BINDGEN_EXTRA_CLANG_ARGS_<triple> (versioned Android target + NDK
+    sysroot; mingw target + llvm-mingw root) - never the plain variable,
+    which would reach host build scripts too. NDK 30 rejects unversioned
+    Android triples in its headers. Linux cross needs nothing (clang finds
+    Debian's /usr/<triple>); macOS has no headers to offer.
   - CargoCommandResult exit codes: -1 = killed (ProcessRunner, on cancel or
     timeout), -2 = LicenseGateFailedExitCode; never reuse either for
     anything else.

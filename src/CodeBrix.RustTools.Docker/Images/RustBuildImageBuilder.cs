@@ -34,18 +34,47 @@ internal sealed class RustBuildImageBuilder
     public async Task<RustBuildImage> EnsureAsync(BuildImageSpec spec, IProgress<string> progress, CancellationToken cancellationToken)
     {
         BuildImageSpec.ThrowIfNull(spec);
-        var dockerfile = DockerfileGenerator.Generate(spec);
-        var hash = DockerfileGenerator.ComputeSpecHash(dockerfile);
-        var baseReference = spec.BaseImageReference;
-
-        var baseImage = await TryInspectAsync(baseReference, cancellationToken).ConfigureAwait(false);
+        var layered = spec;
+        string containerfileReference = null;
+        var containerfileBuilt = false;
+        ImageInspectResult baseImage = null;
         var pulled = false;
-        if (baseImage == null || spec.RefreshBaseImage)
+        if (spec.UsesContainerfile)
         {
-            progress?.Report($"Pulling {baseReference} ...");
-            await _client.Images.PullAsync(baseReference, progress, cancellationToken).ConfigureAwait(false);
-            pulled = true;
-            baseImage = await _client.Images.InspectAsync(baseReference, cancellationToken).ConfigureAwait(false);
+            // The Containerfile's image is the base: build it (once per content hash), then
+            // generate the layers FROM it.
+            spec.ValidateContainerfile();
+            var containerfileHash = ContainerfileImage.ComputeHash(spec);
+            var containerfileTag = ContainerfileImage.TagPrefix + containerfileHash;
+            containerfileReference = spec.ImageName + ":" + containerfileTag;
+            baseImage = spec.RefreshBaseImage ? null : await TryInspectAsync(containerfileReference, cancellationToken).ConfigureAwait(false);
+            if (baseImage == null)
+            {
+                progress?.Report($"Building {containerfileReference} from {Path.GetFullPath(spec.Containerfile)} ...");
+                await BuildContainerfileAsync(spec, containerfileReference, containerfileHash, progress, cancellationToken).ConfigureAwait(false);
+                containerfileBuilt = true;
+                baseImage = await _client.Images.InspectAsync(containerfileReference, cancellationToken).ConfigureAwait(false);
+            }
+
+            layered = spec.Clone();
+            layered.BaseImage = spec.ImageName;
+            layered.Tag = containerfileTag;
+        }
+
+        var dockerfile = DockerfileGenerator.Generate(layered);
+        var hash = DockerfileGenerator.ComputeSpecHash(dockerfile);
+        var baseReference = layered.BaseImageReference;
+
+        if (containerfileReference == null)
+        {
+            baseImage = await TryInspectAsync(baseReference, cancellationToken).ConfigureAwait(false);
+            if (baseImage == null || spec.RefreshBaseImage)
+            {
+                progress?.Report($"Pulling {baseReference} ...");
+                await _client.Images.PullAsync(baseReference, progress, cancellationToken).ConfigureAwait(false);
+                pulled = true;
+                baseImage = await _client.Images.InspectAsync(baseReference, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         if (!spec.RequiresDerivedImage)
@@ -62,6 +91,9 @@ internal sealed class RustBuildImageBuilder
                 BaseImageReference = baseReference,
                 IsBaseImage = true,
                 WasBasePulled = pulled,
+                WasBuilt = containerfileBuilt,
+                ContainerfileImageReference = containerfileReference,
+                WasContainerfileImageBuilt = containerfileBuilt,
             };
         }
 
@@ -88,8 +120,42 @@ internal sealed class RustBuildImageBuilder
             BaseImageReference = baseReference,
             IsBaseImage = false,
             WasBasePulled = pulled,
-            WasBuilt = built,
+            WasBuilt = built || containerfileBuilt,
+            ContainerfileImageReference = containerfileReference,
+            WasContainerfileImageBuilt = containerfileBuilt,
         };
+    }
+
+    /// <summary>
+    /// Builds the image of a spec's Containerfile through the engine's CLI, labelled like every
+    /// image the workbench builds (the spec-hash label holds the Containerfile hash).
+    /// </summary>
+    private async Task BuildContainerfileAsync(BuildImageSpec spec, string reference, string hash, IProgress<string> progress, CancellationToken cancellationToken)
+    {
+        var labels = _labels.For(ResourceLabels.KindImage);
+        labels[_labels.SpecHashKey] = hash;
+        var buildSpec = new ImageBuildSpec
+        {
+            ContextDirectory = spec.ResolveContainerfileContext(),
+            DockerfilePath = Path.GetFullPath(spec.Containerfile),
+            Pull = spec.RefreshBaseImage,
+            Output = progress,
+        };
+        buildSpec.Tags.Add(reference);
+        foreach (var pair in labels)
+        {
+            buildSpec.Labels[pair.Key] = pair.Value;
+        }
+
+        if (spec.ContainerfileBuildArgs != null)
+        {
+            foreach (var pair in spec.ContainerfileBuildArgs)
+            {
+                buildSpec.BuildArgs[pair.Key] = pair.Value ?? string.Empty;
+            }
+        }
+
+        await _client.Images.BuildAsync(buildSpec, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task BuildAsync(string reference, string dockerfile, string hash, IProgress<string> progress, CancellationToken cancellationToken)

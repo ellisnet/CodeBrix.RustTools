@@ -1057,9 +1057,14 @@ WindowsGnullvmLinkProfile (sealed class) - build Windows with llvm-mingw
   static string MachineOf(string triple)              x86_64 / aarch64
   static string RuntimeIdentifierOf(string triple)    win-x64 / win-arm64
   string ClangPath(string triple), ClangPlusPlusPath(string triple)
+  string SysrootDirectory     the llvm-mingw folder (parent of BinDirectory)
+  string BindgenClangArguments(string triple)
+      "--target=<machine>-w64-mingw32 --sysroot=<SysrootDirectory>"
   IReadOnlyDictionary<string,string> EnvironmentFor(string triple)
       CC_<t>, CXX_<t>, AR_<t>, RANLIB_<t>, CARGO_TARGET_<T>_LINKER,
-      CARGO_TARGET_<T>_AR, CARGO_TARGET_<T>_RUSTFLAGS
+      CARGO_TARGET_<T>_AR, CARGO_TARGET_<T>_RUSTFLAGS,
+      BINDGEN_EXTRA_CLANG_ARGS_<t> (so a bindgen build script's libclang
+      finds the mingw-w64 headers; bindgen itself needs libclang installed)
   void ApplyTo(CargoBuildOptions options, string triple)
       The target's standard library must be installed (rustup target add).
       C ABI only across the MSVC boundary (Itanium C++ ABI).
@@ -1085,11 +1090,28 @@ AndroidLinkProfile (sealed class) - build Android targets with the NDK
   static string RuntimeIdentifierOf(string triple)   android-arm64 / android-x64
   static string EnvironmentTripleName(string triple)
   string ClangPath(string triple), ClangPlusPlusPath(string triple)
+  string SysrootDirectory     <prebuilt>/<host>/sysroot (next to bin)
+  string BindgenClangArguments(string triple)
+      "--target=<triple><ApiLevel> --sysroot=<SysrootDirectory>"
   IReadOnlyDictionary<string,string> EnvironmentFor(string triple)
       CC_<t>, CXX_<t>, AR_<t>, RANLIB_<t>, CARGO_TARGET_<T>_LINKER,
-      CARGO_TARGET_<T>_AR
+      CARGO_TARGET_<T>_AR, BINDGEN_EXTRA_CLANG_ARGS_<t>
   void ApplyTo(CargoBuildOptions options, string triple)
       Sets TargetTriple and the variables in options.Environment.
+  bindgen: a crate whose build script runs bindgen (wgpu-native, many -sys
+  crates) needs libclang to parse the NDK's headers for the target. Recent
+  NDKs (30 and later) refuse an unversioned Android triple ("Unversioned
+  target triples are not supported"), and bindgen passes the bare Rust
+  triple; BINDGEN_EXTRA_CLANG_ARGS_<t> therefore carries the API-versioned
+  target (aarch64-linux-android24) and the NDK sysroot, which bindgen
+  applies after its own. Only the per-target variable is set: the plain
+  BINDGEN_EXTRA_CLANG_ARGS would also reach build scripts compiled for the
+  host. Paths are written with forward slashes and quoted when they hold a
+  space (bindgen splits the value shell-style). bindgen still needs libclang
+  on the building machine (Debian: libclang-dev). Linux cross targets need
+  nothing extra (bindgen passes the target; clang finds Debian's
+  /usr/<triple> cross headers itself); the macOS link profile has no Apple
+  headers, so bindgen crates cannot be built for macOS here.
 AndroidBuildOptions (sealed class): AndroidLinkProfile Profile (null = the
   detected NDK); int ApiLevel = 24; IList<string> Triples (both 64-bit
   targets); AndroidOutputLayout Layout = JniLibs; bool IncludeExecutables

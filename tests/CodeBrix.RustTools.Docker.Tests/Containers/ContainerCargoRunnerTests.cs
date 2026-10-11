@@ -102,6 +102,7 @@ public class ContainerCargoRunnerTests
         invocation.Environment.Should().Contain($"CC_{lower}=/opt/llvm-mingw/bin/{machine}-w64-mingw32-clang");
         invocation.Environment.Should().Contain($"CXX_{lower}=/opt/llvm-mingw/bin/{machine}-w64-mingw32-clang++");
         invocation.Environment.Should().Contain($"AR_{lower}=/opt/llvm-mingw/bin/llvm-ar");
+        invocation.Environment.Should().Contain($"BINDGEN_EXTRA_CLANG_ARGS_{lower}=--target={machine}-w64-mingw32 --sysroot=/opt/llvm-mingw");
         options.TargetTriple.Should().BeNull();
     }
 
@@ -119,6 +120,8 @@ public class ContainerCargoRunnerTests
         invocation.Environment.Should().Contain($"CXX_aarch64_linux_android={Bin}/aarch64-linux-android24-clang++");
         invocation.Environment.Should().Contain($"AR_aarch64_linux_android={Bin}/llvm-ar");
         invocation.Environment.Should().Contain($"CARGO_TARGET_AARCH64_LINUX_ANDROID_AR={Bin}/llvm-ar");
+        invocation.Environment.Should().Contain("BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--target=aarch64-linux-android24 --sysroot=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot");
+        invocation.Environment.Should().NotContain(e => e.StartsWith("BINDGEN_EXTRA_CLANG_ARGS=", System.StringComparison.Ordinal));
     }
 
     [Fact]

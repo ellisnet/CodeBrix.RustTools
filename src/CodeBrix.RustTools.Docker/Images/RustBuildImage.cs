@@ -35,15 +35,26 @@ public sealed class RustBuildImage
     /// <summary>The base image reference, for example <c>rust:latest</c>.</summary>
     public string BaseImageReference { get; init; } = string.Empty;
 
-    /// <summary>Whether this is the base image used directly (the spec added no
-    /// layers).</summary>
+    /// <summary>Whether this is the base image used directly (the spec added no layers) - the
+    /// pulled base image, or the image built from <see cref="BuildImageSpec.Containerfile"/>.</summary>
     public bool IsBaseImage { get; init; }
 
     /// <summary>Whether the base image was pulled during this call.</summary>
     public bool WasBasePulled { get; init; }
 
-    /// <summary>Whether the derived image was built during this call.</summary>
+    /// <summary>Whether the derived image, or the Containerfile image, was built during this
+    /// call.</summary>
     public bool WasBuilt { get; init; }
+
+    /// <summary>The image built from <see cref="BuildImageSpec.Containerfile"/>
+    /// (<c>&lt;ImageName&gt;:containerfile-&lt;hash&gt;</c>), or <c>null</c> when the spec names
+    /// no Containerfile. Without layers it is this image itself (<see cref="IsBaseImage"/>);
+    /// with layers it is the base they were built on.</summary>
+    public string ContainerfileImageReference { get; init; }
+
+    /// <summary>Whether the Containerfile image was built during this call (a second call with
+    /// the same Containerfile, build arguments and context reuses it).</summary>
+    public bool WasContainerfileImageBuilt { get; init; }
 
     /// <summary>
     /// Whether the image was already on the engine: nothing had to be built, and for a base

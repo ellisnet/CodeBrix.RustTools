@@ -17,6 +17,10 @@ namespace CodeBrix.RustTools.Docker.Containers;
 /// </summary>
 internal static class BuildContainerFactory
 {
+    /// <summary>The network mode of a container started with
+    /// <see cref="BuildContainerOptions.NetworkDisabled"/>: no network but loopback.</summary>
+    public const string NoNetworkMode = "none";
+
     /// <summary>The environment every build container gets unless the options override
     /// it.</summary>
     public static readonly IReadOnlyDictionary<string, string> StandardEnvironment = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -93,6 +97,7 @@ internal static class BuildContainerFactory
             Command = new[] { "sleep", "infinity" },
             WorkingDir = BuildContainer.WorkDirectory,
             Limits = options.ResourceLimits,
+            NetworkMode = options.NetworkDisabled ? NoNetworkMode : null,
         };
 
         foreach (var pair in MergeEnvironment(options.Env))
@@ -160,6 +165,11 @@ internal static class BuildContainerFactory
         text.Append("cache=").Append(cacheVolumeName).Append('\n');
         text.Append("name=").Append(options.Name ?? string.Empty).Append('\n');
         text.Append("target=").Append(options.TargetVolumeName ?? string.Empty).Append('\n');
+        if (options.NetworkDisabled)
+        {
+            text.Append("network=").Append(NoNetworkMode).Append('\n');
+        }
+
         foreach (var pair in MergeEnvironment(options.Env))
         {
             text.Append("env=").Append(pair.Key).Append('=').Append(pair.Value).Append('\n');

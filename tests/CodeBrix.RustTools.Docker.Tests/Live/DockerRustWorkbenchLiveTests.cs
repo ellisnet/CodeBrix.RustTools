@@ -97,6 +97,56 @@ public class DockerRustWorkbenchLiveTests
     }
 
     [Fact]
+    public async Task EnsureImageAsync_builds_a_containerfile_image_once_and_uses_it_whole_or_as_the_base_of_layers()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var marker = Guid.NewGuid().ToString("N");
+        var containerfile = sandbox.WriteFile("Containerfile", $"FROM {_fixture.BaseImage.Reference}\nARG NOTE=unset\nCOPY marker.txt /opt/marker.txt\nRUN echo \"$NOTE\" > /opt/note.txt\n");
+        sandbox.WriteFile("marker.txt", marker + "\n");
+        BuildImageSpec Spec(params string[] extraLines)
+        {
+            var spec = new BuildImageSpec { Containerfile = containerfile, ContainerfileBuildArgs = { ["NOTE"] = "from-args" } };
+            foreach (var line in extraLines)
+            {
+                spec.ExtraDockerfileLines.Add(line);
+            }
+
+            return spec;
+        }
+
+        //Act
+        var whole = await Workbench.EnsureImageAsync(Spec(), null, TestContext.Current.CancellationToken);
+        var again = await Workbench.EnsureImageAsync(Spec(), null, TestContext.Current.CancellationToken);
+        var layered = await Workbench.EnsureImageAsync(Spec("RUN echo layered > /opt/layer.txt"), null, TestContext.Current.CancellationToken);
+        await using var container = await Workbench.StartContainerAsync(layered, null, TestContext.Current.CancellationToken);
+        var files = await Workbench.ExecAsync(container, new[] { "sh", "-c", "cat /opt/marker.txt /opt/note.txt /opt/layer.txt" }, TestContext.Current.CancellationToken);
+        var cargo = await Workbench.ExecAsync(container, new[] { "cargo", "--version" }, TestContext.Current.CancellationToken);
+
+        //Assert
+        whole.WasContainerfileImageBuilt.Should().BeTrue();
+        whole.WasBuilt.Should().BeTrue();
+        whole.IsBaseImage.Should().BeTrue();
+        whole.ImageName.Should().Be(DockerEngineFixture.TestImageRepository);
+        whole.Tag.Should().StartWith("containerfile-");
+        whole.ContainerfileImageReference.Should().Be(whole.Reference);
+        again.WasContainerfileImageBuilt.Should().BeFalse();
+        again.WasReused.Should().BeTrue();
+        again.ImageId.Should().Be(whole.ImageId);
+        layered.IsBaseImage.Should().BeFalse();
+        layered.WasContainerfileImageBuilt.Should().BeFalse();
+        layered.BaseImageReference.Should().Be(whole.Reference);
+        layered.ContainerfileImageReference.Should().Be(whole.Reference);
+        files.Split('\n', StringSplitOptions.RemoveEmptyEntries).Should().Equal(marker, "from-args", "layered");
+        cargo.Should().StartWith("cargo ");
+
+        var inspect = await Client.Images.InspectAsync(whole.Reference, TestContext.Current.CancellationToken);
+        inspect.Config.Labels[Prefix].Should().Be("1");
+        inspect.Config.Labels[Prefix + ".kind"].Should().Be("image");
+        inspect.Config.Labels[Prefix + ".spec-hash"].Should().Be(whole.Tag.Substring("containerfile-".Length));
+    }
+
+    [Fact]
     public async Task derived_image_has_clippy_and_rustfmt()
     {
         //Arrange
@@ -227,6 +277,37 @@ public class DockerRustWorkbenchLiveTests
         result.ExitCode.Should().Be(4);
         result.StandardOutput.Should().Be("one\nthree");
         result.Succeeded.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(5000, 200, false)]
+    [InlineData(5000, 200, true)]
+    [InlineData(100, 65536, false)]
+    public async Task RunStreamingAsync_delivers_every_line_of_a_large_output_in_order(int lineCount, int padLength, bool interleaveStandardError)
+    {
+        //Arrange
+        var stdout = new List<string>();
+        var stderr = new List<string>();
+        var pad = new string('x', padLength);
+        var errorLine = interleaveStandardError ? "echo \"err $i\" >&2; " : string.Empty;
+        var script = $"p={pad}; i=0; while [ $i -lt {lineCount} ]; do echo \"{{\\\"line\\\":$i,\\\"pad\\\":\\\"$p\\\"}}\"; " + errorLine + "i=$((i+1)); done";
+
+        //Act
+        var result = await ContainerCommandRunner.RunStreamingAsync(
+            Client,
+            _fixture.SharedContainer.Id,
+            new[] { "sh", "-c", script },
+            BuildContainer.WorkDirectory,
+            null,
+            stdout.Add,
+            stderr.Add,
+            TestContext.Current.CancellationToken);
+
+        //Assert
+        result.ExitCode.Should().Be(0);
+        stdout.Should().HaveCount(lineCount);
+        Enumerable.Range(0, lineCount).All(i => stdout[i] == "{\"line\":" + i + ",\"pad\":\"" + pad + "\"}").Should().BeTrue("every standard output line must arrive intact and in order");
+        stderr.Should().Equal(interleaveStandardError ? Enumerable.Range(0, lineCount).Select(i => "err " + i) : Enumerable.Empty<string>());
     }
 
     [Fact]

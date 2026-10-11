@@ -37,6 +37,39 @@ public class BuildContainerFactoryTests
     }
 
     [Fact]
+    public void BuildSpec_leaves_the_network_to_the_engine_by_default()
+    {
+        //Act
+        var spec = BuildContainerFactory.BuildSpec(Image, new BuildContainerOptions(), Labels, "cache", "box", "box-target", "key1");
+
+        //Assert
+        spec.NetworkMode.Should().BeNull();
+        spec.NetworkName.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildSpec_sets_network_mode_none_when_the_network_is_disabled()
+    {
+        //Act
+        var spec = BuildContainerFactory.BuildSpec(Image, new BuildContainerOptions { NetworkDisabled = true }, Labels, "cache", "box", "box-target", "key1");
+
+        //Assert
+        spec.NetworkMode.Should().Be("none");
+        spec.Mounts.Select(m => m.Source).Should().Contain("cache");
+    }
+
+    [Fact]
+    public void ComputeReuseKey_never_matches_a_networked_container_for_a_network_less_request()
+    {
+        //Act
+        var networked = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions(), "cache");
+        var isolated = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions { NetworkDisabled = true }, "cache");
+
+        //Assert
+        isolated.Should().NotBe(networked);
+    }
+
+    [Fact]
     public void BuildSpec_mounts_the_two_cache_volumes_and_the_target_volume()
     {
         //Act

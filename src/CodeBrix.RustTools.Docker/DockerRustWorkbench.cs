@@ -123,7 +123,11 @@ public sealed class DockerRustWorkbench : IDisposable
     /// when it is missing; when the spec adds no layers the base image itself is the result
     /// (<see cref="RustBuildImage.IsBaseImage"/>); otherwise the derived image tagged with the
     /// hash of its generated Dockerfile is built once and reused afterwards. Building a derived
-    /// image needs the <c>docker</c> command-line tool (BuildKit).
+    /// image needs the <c>docker</c> command-line tool (BuildKit), and the generated layers are
+    /// Debian (<c>apt</c>) based. With <see cref="BuildImageSpec.Containerfile"/> the base image is
+    /// built from that Containerfile instead of being pulled (once per content hash; see the
+    /// property) - the route for a non-Debian base such as manylinux - and is used as it is when
+    /// the spec adds no layers.
     /// </summary>
     /// <param name="spec">The image to prepare; <c>null</c> means the workbench's base image
     /// with no layers.</param>
@@ -138,17 +142,21 @@ public sealed class DockerRustWorkbench : IDisposable
     /// for an Android target on an engine that is not x86-64 (the Android NDK's compilers run on
     /// x86-64 Linux only).</exception>
     /// <exception cref="ArgumentException">A value in the spec is not valid.</exception>
+    /// <exception cref="FileNotFoundException">The spec's Containerfile does not exist.</exception>
+    /// <exception cref="DirectoryNotFoundException">The spec's Containerfile context folder does
+    /// not exist.</exception>
     public async Task<RustBuildImage> EnsureImageAsync(BuildImageSpec spec = null, IProgress<string> progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         var resolved = (spec ?? new BuildImageSpec()).WithDefaults(Options);
+        resolved.ValidateContainerfile();
         DockerfileGenerator.Generate(resolved);
         var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
         resolved = resolved.WithoutNativeLinuxTargets(engine);
         CrossTargetInfo.EnsureEngineCanBuild(engine, resolved.CrossTargets);
         var builder = new RustBuildImageBuilder(GetClient(), _labels);
         return await RunDockerAsync(
-            $"Preparing the build image from {resolved.BaseImageReference}",
+            $"Preparing the build image from {(resolved.UsesContainerfile ? resolved.Containerfile : resolved.BaseImageReference)}",
             token => builder.EnsureAsync(resolved, progress, token),
             Options.DefaultTimeouts.ImagePreparation,
             cancellationToken).ConfigureAwait(false);
@@ -160,6 +168,10 @@ public sealed class DockerRustWorkbench : IDisposable
     /// earlier). The container runs <c>sleep infinity</c> with <c>/work</c> as its working
     /// directory; cargo's registry and git caches are mounted from the workbench's cache volumes
     /// and <c>/work/target</c> from a target volume. Every container and volume is labelled.
+    /// With <see cref="BuildContainerOptions.NetworkDisabled"/> the container has no network:
+    /// run <c>cargo fetch</c> (<see cref="CargoCommand.Fetch"/>) in a networked container first,
+    /// then build with <see cref="CargoBuildOptions.Offline"/> in the network-less one - the two
+    /// share the workbench's cargo cache volumes.
     /// </summary>
     /// <param name="image">An image from <see cref="EnsureImageAsync"/>.</param>
     /// <param name="options">Container settings; <c>null</c> uses the defaults.</param>

@@ -435,9 +435,14 @@ IMAGES (CodeBrix.RustTools.Docker.Images)
         IList<string> ExtraDockerfileLines { get; set; }   // 1 instruction each
         string ImageName    { get; set; }   // null => BuildImageRepository
         bool RefreshBaseImage { get; set; } // pull even when present
+        string Containerfile { get; set; }  // null; host path: build the
+                                            // base from it ("bring your own")
+        string ContainerfileContext { get; set; }  // null => its folder
+        IDictionary<string, string> ContainerfileBuildArgs { get; set; }
 
         string BaseImageReference { get; }  // "rust:latest" etc.
         bool   RequiresDerivedImage { get; }
+        bool   UsesContainerfile { get; }
         BuildImageSpec Clone();
     }
 
@@ -481,8 +486,11 @@ tag) and CrossTargetNotSupportedException for macOS targets.
         string Dockerfile, SpecHash, BaseImageReference;
         bool IsBaseImage;             // spec had no layers
         bool WasBasePulled;           // pulled during this call
-        bool WasBuilt;                // derived image built during this call
+        bool WasBuilt;                // derived (or Containerfile) image
+                                      // built during this call
         bool WasReused { get; }       // already on the engine
+        string ContainerfileImageReference;  // null without a Containerfile
+        bool WasContainerfileImageBuilt;
     }
 
 EnsureImageAsync, step by step:
@@ -498,6 +506,51 @@ A derived image is reused for as long as its Dockerfile text is unchanged -
 even when the moving base tag (for example rust:latest) has moved on. Set
 RefreshBaseImage and change the spec (for example pin RustVersion) to
 rebuild on a newer base.
+
+WHAT THE GENERATED LAYERS NEED: they are Debian-based (apt-get for
+AptPackages and the Linux cross / Windows / Android / macOS layers; rustup
+for RustVersion and InstallClippyRustfmt), so they fit the official rust
+image and other Debian bases only, and building them needs the docker CLI
+(CodeBrix.Docker builds images with `docker build`, BuildKit/buildx). A
+base that is not Debian - manylinux / AlmaLinux with dnf, a pinned system
+toolchain, cross sysroots - cannot be layered with apt. Bring your own
+Containerfile instead (below); that is the supported route.
+
+BRING YOUR OWN CONTAINERFILE (BuildImageSpec.Containerfile):
+    var image = await wb.EnsureImageAsync(new BuildImageSpec
+    {
+        Containerfile = "linux/Containerfile.x86_64",   // host path
+        ContainerfileContext = null,                    // => linux/
+        ContainerfileBuildArgs = { ["RUST_TOOLCHAIN"] = "1.93" },
+    });
+  1. The workbench hashes the Containerfile's bytes, the build arguments
+     (sorted) and every file of the context folder (relative path + SHA-256;
+     symbolic links by target, never followed) and looks for
+     <ImageName>:containerfile-<hash>. Missing (or RefreshBaseImage, which
+     also pulls the FROM image afresh) -> it is built through the engine's
+     CLI with -f <Containerfile>, the build arguments and the workbench's
+     labels (<prefix>.kind=image, <prefix>.spec-hash=<hash>), so
+     CleanupAsync(RemoveImages) removes it. A second EnsureImageAsync with
+     the same inputs reuses it (WasContainerfileImageBuilt false). Files a
+     .dockerignore excludes still count: editing one costs a rebuild, never
+     a stale image. Keep the context folder small.
+  2. No layers in the spec -> that image IS the build image (IsBaseImage =
+     true). It must then provide Rust itself: rustup with
+     CARGO_HOME=/usr/local/cargo (the official rust image's layout - the
+     cargo cache volumes mount at /usr/local/cargo/registry and /git),
+     cargo on PATH, and sh. This is the usual form for a non-Debian base.
+  3. Layers in the spec -> they are generated FROM that image (the derived
+     image's BaseImageReference is <ImageName>:containerfile-<hash>); the
+     layer rules above apply (rustup for RustVersion/clippy, Debian for apt
+     and the cross layers).
+  BaseImage and Tag must stay unset with a Containerfile (ArgumentException);
+  a missing Containerfile or context folder throws FileNotFoundException /
+  DirectoryNotFoundException before the engine is touched.
+  Podman without the docker CLI: point CodeBrix.Docker at podman for builds,
+      ClientOptions = new DockerClientOptions { Endpoint =
+          "unix:///run/user/1000/podman/podman.sock", DockerCliPath = "podman" }
+  `podman build` takes the same arguments and writes to the same local
+  storage the Podman API socket serves.
 
 
 CROSS-COMPILATION TARGETS
@@ -588,7 +641,10 @@ WindowsX64Gnullvm / WindowsArm64Gnullvm: Rust's windows-gnullvm targets,
   targets; one layer serves x64 and ARM64, on x86-64 and ARM64 engines
   alike. cargo runs with --target and the target's clang wrapper as linker
   and C/C++ compiler, llvm-ar as archiver and
-  -C target-feature=+crt-static (CodeBrix.RustTools.WindowsGnullvmLinkProfile),
+  -C target-feature=+crt-static (CodeBrix.RustTools.WindowsGnullvmLinkProfile;
+  also BINDGEN_EXTRA_CLANG_ARGS_<triple> = "--target=<machine>-w64-mingw32
+  --sysroot=/opt/llvm-mingw" so bindgen finds the mingw-w64 headers - add
+  libclang-dev to AptPackages for bindgen crates),
   which links llvm-mingw's unwinder statically: the output imports only
   Windows' own DLLs - the Universal C Runtime and the system libraries -
   and so needs Windows 10 or later. NO Microsoft SDK, compiler or runtime
@@ -615,7 +671,11 @@ AndroidArm64 / AndroidX64: the layer downloads the Android NDK (the LTS
   `cargo build --target <triple>` directly, with the variables that point
   cargo and C build scripts at the NDK (CC_, CXX_, AR_, RANLIB_<triple> and
   CARGO_TARGET_<TRIPLE>_LINKER / _AR pointing at the NDK's
-  <triple>24-clang and llvm-ar) - Android API level 24 (Android 7.0). They
+  <triple>24-clang and llvm-ar, and BINDGEN_EXTRA_CLANG_ARGS_<triple> =
+  "--target=<triple>24 --sysroot=<NDK sysroot>" for crates whose build
+  script runs bindgen - recent NDKs refuse the bare triple bindgen passes;
+  bindgen also needs libclang in the image: AptPackages = { "libclang-dev" })
+  - Android API level 24 (Android 7.0). They
   come from CodeBrix.RustTools.AndroidLinkProfile, the same type the sibling
   package applies to a host's own NDK, so a container and a host set
   identical variables. The cargo-ndk tool is neither installed nor used: it
@@ -728,6 +788,7 @@ CONTAINERS (CodeBrix.RustTools.Docker.Containers)
         ResourceLimits ResourceLimits { get; set; }   // CodeBrix.Docker
         IList<MountSpec> Mounts { get; set; }         // CodeBrix.Docker
         string TargetVolumeName { get; set; } // null => <name>-target
+        bool NetworkDisabled { get; set; }    // false; true => network mode "none"
         BuildContainerOptions Clone();
     }
 
@@ -762,12 +823,16 @@ What StartContainerAsync creates:
     CARGO_TERM_COLOR=never and RUSTUP_AUTO_INSTALL=0 (plus Env, which may
     override them), labels <prefix>=1, <prefix>.workbench=<InstanceId>,
     <prefix>.kind=container, <prefix>.reuse-key, <prefix>.spec-hash, then
-    the extra Mounts and the ResourceLimits.
+    the extra Mounts and the ResourceLimits. With NetworkDisabled the
+    container's network mode is "none": it has only a loopback interface and
+    nothing inside it (cargo, a build script, a proc macro) can resolve or
+    reach a registry or any other host.
   - Name: options.Name, else <ContainerNamePrefix>-<12 random hex>, or with
     ReuseExisting <ContainerNamePrefix>-<reuse key>.
 ReuseExisting: the reuse key is a hash of the image (reference and id), the
-cache volume, Name, TargetVolumeName, the merged environment, the extra
-mounts and the limits. A labelled container with the same key is returned
+cache volume, Name, TargetVolumeName, NetworkDisabled, the merged
+environment, the extra mounts and the limits (a network-less container is
+never reused for a networked request, nor the other way round). A labelled container with the same key is returned
 (WasReused = true); a stopped one is started again first. Otherwise a new
 one is created.
 Disposal: unless KeepOnDispose, DisposeAsync force-removes the container
@@ -775,6 +840,29 @@ Disposal: unless KeepOnDispose, DisposeAsync force-removes the container
 disposal are swallowed. StopAndRemoveAsync does the same but throws, and
 leaves a target volume that another container still uses. Calling either
 twice is harmless.
+
+Fetch, then build offline (no network during the compile):
+  The cargo cache volumes are shared by every container of the workbench,
+  so download in a networked container and compile in a network-less one:
+
+    await using (var online = await wb.StartContainerAsync(image))
+    {
+        await wb.CopySourceAsync(online, dir);
+        var fetch = await wb.RunCargoAsync(online, CargoCommand.Fetch,
+            new CargoBuildOptions { Locked = true });   // downloads everything
+    }
+
+    await using var offline = await wb.StartContainerAsync(image,
+        new BuildContainerOptions { NetworkDisabled = true });
+    await wb.CopySourceAsync(offline, dir);
+    var build = await wb.RunCargoAsync(offline, CargoCommand.Build,
+        new CargoBuildOptions { Locked = true, Offline = true });
+
+  CargoBuildOptions.Offline alone only stops cargo itself from fetching;
+  NetworkDisabled also stops build scripts and proc macros. A crate that is
+  not in the cache fails the offline build with cargo's "attempting to make
+  an HTTP request, but --offline was specified" error (Success false), never
+  a hang.
 
 
 SOURCE COPY (CopySourceAsync)
@@ -1644,6 +1732,8 @@ COMMON PITFALLS TO AVOID
      volume (a separate workbench with its own CacheVolumeName), and destroy
      the container and its volumes afterwards (DestroyContainerAfterBuild =
      true, then CleanupAsync with RemoveVolumes and OnlyThisWorkbench).
+     Fetch its dependencies first and compile it with NetworkDisabled = true,
+     so its build scripts cannot reach the network.
      Never build it on the host. Note that the derived image's BuildKit
      cache is not covered by that cleanup; PruneBuildCache is the only way
      to reclaim it, and it is engine-wide.
@@ -1743,6 +1833,8 @@ QUICK REFERENCE CARD
   Check the engine        await wb.CheckEngineAsync()
   Guidance                wb.GetDockerGuidance(info)
   Base image              await wb.EnsureImageAsync()
+  Own Containerfile       await wb.EnsureImageAsync(new BuildImageSpec {
+                              Containerfile = "Containerfile" })
   Derived image           await wb.EnsureImageAsync(new BuildImageSpec {
                               AptPackages = {...}, InstallClippyRustfmt = true,
                               CrossTargets = { CrossTarget.WindowsX64Gnullvm } })
@@ -1752,6 +1844,8 @@ QUICK REFERENCE CARD
   Run a command           await wb.ExecAsync(c, ["cargo", "--version"])
   Keep / reuse            new BuildContainerOptions { KeepOnDispose = true,
                               ReuseExisting = true }
+  No network              new BuildContainerOptions { NetworkDisabled = true }
+                              (fetch first in a networked container)
   Remove one container    await c.StopAndRemoveAsync()
   Remove everything       await wb.CleanupAsync(new CleanupOptions {
                               RemoveImages = true, RemoveVolumes = true })

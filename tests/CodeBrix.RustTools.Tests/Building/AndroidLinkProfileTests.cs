@@ -12,6 +12,8 @@ public class AndroidLinkProfileTests
 {
     private const string ContainerBin = "/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin";
 
+    private const string ContainerSysroot = "/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot";
+
     [Fact]
     public void EnvironmentFor_sets_what_cargo_ndk_sets_for_the_arm64_target()
     {
@@ -25,7 +27,44 @@ public class AndroidLinkProfileTests
         environment["RANLIB_aarch64_linux_android"].Should().Be(ContainerBin + "/llvm-ranlib");
         environment["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"].Should().Be(ContainerBin + "/aarch64-linux-android24-clang");
         environment["CARGO_TARGET_AARCH64_LINUX_ANDROID_AR"].Should().Be(ContainerBin + "/llvm-ar");
-        environment.Count.Should().Be(6);
+        environment["BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android"].Should().Be("--target=aarch64-linux-android24 --sysroot=" + ContainerSysroot);
+        environment.Count.Should().Be(7);
+    }
+
+    [Fact]
+    public void EnvironmentFor_gives_bindgen_the_api_versioned_target_and_the_ndk_sysroot()
+    {
+        //Act
+        var environment = new AndroidLinkProfile(ContainerBin, 33).EnvironmentFor("x86_64-linux-android");
+
+        //Assert
+        environment["BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android"].Should().Be("--target=x86_64-linux-android33 --sysroot=" + ContainerSysroot);
+        environment.Keys.Should().NotContain("BINDGEN_EXTRA_CLANG_ARGS");
+    }
+
+    [Fact]
+    public void SysrootDirectory_is_the_sysroot_folder_next_to_bin()
+        => new AndroidLinkProfile(ContainerBin + "/").SysrootDirectory.Should().Be(ContainerSysroot);
+
+    [Fact]
+    public void BindgenClangArguments_uses_forward_slashes_and_quotes_a_path_with_spaces()
+    {
+        //Act
+        var arguments = new AndroidLinkProfile(@"C:\Users\Some One\Android\ndk\toolchains\llvm\prebuilt\windows-x86_64\bin", 24, windowsFileNames: true)
+            .BindgenClangArguments("aarch64-linux-android");
+
+        //Assert
+        arguments.Should().Be("--target=aarch64-linux-android24 --sysroot=\"C:/Users/Some One/Android/ndk/toolchains/llvm/prebuilt/windows-x86_64/sysroot\"");
+    }
+
+    [Fact]
+    public void BindgenClangArguments_rejects_a_triple_that_is_not_android()
+    {
+        //Act
+        var act = () => new AndroidLinkProfile(ContainerBin).BindgenClangArguments("x86_64-unknown-linux-gnu");
+
+        //Assert
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]

@@ -9,6 +9,8 @@ public class WindowsGnullvmLinkProfileTests
 {
     private const string Bin = "/opt/llvm-mingw/bin";
 
+    private const string Root = "/opt/llvm-mingw";
+
     [Theory]
     [InlineData("x86_64-pc-windows-gnullvm", "x86_64", "win-x64")]
     [InlineData("aarch64-pc-windows-gnullvm", "aarch64", "win-arm64")]
@@ -34,8 +36,18 @@ public class WindowsGnullvmLinkProfileTests
         environment["CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER"].Should().Be(Bin + "/aarch64-w64-mingw32-clang");
         environment["CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR"].Should().Be(Bin + "/llvm-ar");
         environment["CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_RUSTFLAGS"].Should().Be("-C target-feature=+crt-static");
-        environment.Count.Should().Be(7);
+        environment["BINDGEN_EXTRA_CLANG_ARGS_aarch64_pc_windows_gnullvm"].Should().Be("--target=aarch64-w64-mingw32 --sysroot=" + Root);
+        environment.Count.Should().Be(8);
     }
+
+    [Fact]
+    public void SysrootDirectory_is_the_llvm_mingw_folder()
+        => new WindowsGnullvmLinkProfile(Bin + "/").SysrootDirectory.Should().Be(Root);
+
+    [Fact]
+    public void BindgenClangArguments_targets_mingw_with_forward_slashes_on_a_windows_host()
+        => new WindowsGnullvmLinkProfile(@"C:\llvm-mingw\bin", windowsFileNames: true).BindgenClangArguments("x86_64-pc-windows-gnullvm")
+            .Should().Be("--target=x86_64-w64-mingw32 --sysroot=C:/llvm-mingw");
 
     [Fact]
     public void EnvironmentFor_uses_exe_names_on_a_windows_host()
