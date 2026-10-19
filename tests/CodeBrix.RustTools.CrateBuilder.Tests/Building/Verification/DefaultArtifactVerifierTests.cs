@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CodeBrix.RustTools.CrateBuilder.Building.ManyLinux;
 using CodeBrix.RustTools.CrateBuilder.Building.Verification;
 using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
@@ -100,6 +101,19 @@ public class DefaultArtifactVerifierTests : IClassFixture<NativeBinariesFixture>
     [InlineData(new string[0], false, true)]
     public void RequiresExports_follows_the_crate_types(string[] types, bool facade, bool expected) =>
         DefaultArtifactVerifier.RequiresExports(new StagedWorkspace { IsFacade = facade, Identity = new CrateSourceIdentity { CrateTypes = types } }).Should().Be(expected);
+
+    [Fact]
+    public void CallableExports_leaves_out_the_rust_symbols_a_mingw_linker_exports_on_its_own()
+    {
+        //Arrange
+        var linkerOnly = new[] { "_ZN4core3fmt5write17h0123456789abcdefE", "_RNvCsdBezzDwma51_7___rustc12___rust_alloc", "___chkstk_ms", "rust_eh_personality" };
+        var withOwn = new NativeArtifactInfo { ExportedSymbols = linkerOnly.Concat(new[] { "plaincdylib_add", "rust_add" }).ToList() };
+
+        //Act + Assert
+        DefaultArtifactVerifier.CallableExports(withOwn).Should().Equal("plaincdylib_add", "rust_add");
+        DefaultArtifactVerifier.CallableExports(new NativeArtifactInfo { ExportedSymbols = linkerOnly }).Should().BeEmpty();
+        DefaultArtifactVerifier.CallableExports(new NativeArtifactInfo()).Should().BeEmpty();
+    }
 
     [Fact]
     public void GlibcFloorVerifier_accepts_a_library_within_a_high_floor()

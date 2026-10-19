@@ -25,6 +25,8 @@ namespace CodeBrix.RustTools.CrateBuilder.Tests.EndToEnd;
 /// </summary>
 public class HostEndToEndTests
 {
+    private const string BuildScriptLinkTooDeep = "the MSVC linker cannot open the cargo build scripts it links (LNK1104)";
+
     private static CrateBuildRequest Request(string manifest, string output, params CrateTarget[] targets) => new CrateBuildRequest
     {
         Source = new LocalManifestSource(manifest),
@@ -430,6 +432,7 @@ public class HostEndToEndTests
     public async Task a_webgpu_linked_cdylib_is_verified_recorded_and_called_after_the_engine_is_loaded()
     {
         //Arrange
+        Capabilities.SkipOnWindowsPathLimit(BuildScriptLinkTooDeep);
         await Capabilities.SkipIfCargoMissingAsync();
         DotnetCli.SkipIfMissing();
         WebGpuTestPackage.LocateOrSkip();
@@ -475,6 +478,7 @@ public class HostEndToEndTests
     public async Task a_webgpu_linked_facade_that_calls_no_engine_function_passes_with_a_warning()
     {
         //Arrange
+        Capabilities.SkipOnWindowsPathLimit(BuildScriptLinkTooDeep);
         await Capabilities.SkipIfCargoMissingAsync();
         WebGpuTestPackage.LocateOrSkip();
         var target = EndToEndKit.HostTargetOrSkip();
@@ -620,6 +624,7 @@ public class HostEndToEndTests
     public async Task a_shared_cargo_target_directory_is_used_by_every_cargo_run_and_reused_by_the_next_build()
     {
         //Arrange
+        Capabilities.SkipOnWindowsPathLimit(BuildScriptLinkTooDeep);
         await Capabilities.SkipIfCargoMissingAsync();
         var target = EndToEndKit.HostTargetOrSkip();
         var triple = CrateTargets.Triple(target);

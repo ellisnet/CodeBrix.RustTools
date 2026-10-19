@@ -69,7 +69,7 @@ public class DefaultWrapRulesEndToEndTests
             "family after=z 0 none",
             "library first=alpha data=1,2,3 mode=Slow",
             "file name=c.txt",
-            "join=/srv/x/y.bin",
+            OperatingSystem.IsWindows() ? "join=/srv/x\\y.bin" : "join=/srv/x/y.bin", // Path::join adds the target's separator
             "stem=report",
             "shout=HEY",
             "total=5",
@@ -439,10 +439,20 @@ public class DefaultWrapRulesEndToEndTests
             if a.len() >= b.len() { a } else { b }
         }
 
-        #[cfg(unix)]
+        /// A path that is not valid Unicode on every host: a stray byte on Unix, an unpaired
+        /// surrogate on Windows.
         pub fn odd_path() -> PathBuf {
-            use std::os::unix::ffi::OsStringExt;
-            PathBuf::from(std::ffi::OsString::from_vec(vec![0x66, 0xff]))
+            #[cfg(unix)]
+            let name = {
+                use std::os::unix::ffi::OsStringExt;
+                std::ffi::OsString::from_vec(vec![0x66, 0xff])
+            };
+            #[cfg(windows)]
+            let name = {
+                use std::os::windows::ffi::OsStringExt;
+                std::ffi::OsString::from_wide(&[0x66, 0xd800])
+            };
+            PathBuf::from(name)
         }
 
         /// A data-carrying enum: an object with its methods and a generated Variant().

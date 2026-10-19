@@ -261,6 +261,7 @@ public class FacadeRendererLiveTests
     public async Task A_webgpu_linked_facade_builds_with_the_link_stager_and_bundles_no_engine()
     {
         //Arrange
+        Capabilities.SkipOnWindowsPathLimit("the MSVC linker cannot open the cargo build scripts it links (LNK1104)");
         await Capabilities.SkipIfCargoMissingAsync();
         WebGpuTestPackage.LocateOrSkip();
         var target = WebGpuTestPackage.HostTarget();

@@ -57,6 +57,9 @@ public class CrateReadinessTests
         }
     }
 
+    // The cross-tool and rust-lld lookups add .exe to a tool's name on a Windows host.
+    private static string Executable(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
+
     // ---- host mode, mapping ----
 
     [Fact]
@@ -108,8 +111,8 @@ public class CrateReadinessTests
         //Arrange
         using var sandbox = SampleSandbox.CreateEmpty();
         var tools = sandbox.CreateDirectory("cross");
-        Touch(Path.Combine(tools, "aarch64-linux-gnu-gcc"));
-        Touch(Path.Combine(tools, "aarch64-linux-gnu-ar"));
+        Touch(Path.Combine(tools, Executable("aarch64-linux-gnu-gcc")));
+        Touch(Path.Combine(tools, Executable("aarch64-linux-gnu-ar")));
         var toolchain = Toolchain(installedTargets: "aarch64-unknown-linux-gnu");
 
         //Act
@@ -156,7 +159,7 @@ public class CrateReadinessTests
         //Arrange
         using var sandbox = SampleSandbox.CreateEmpty();
         var rustSysroot = sandbox.CreateDirectory("rust-sysroot");
-        Touch(Path.Combine(rustSysroot, "lib", "rustlib", LinuxHost, "bin", "rust-lld"));
+        Touch(Path.Combine(rustSysroot, "lib", "rustlib", LinuxHost, "bin", Executable("rust-lld")));
         var macSysroot = sandbox.CreateDirectory("macos-sysroot");
         Touch(Path.Combine(macSysroot, "usr", "lib", "libSystem.tbd"));
         var toolchain = Toolchain(sysroot: rustSysroot, installedTargets: "aarch64-apple-darwin");

@@ -554,6 +554,15 @@ The CrateBuilder suite (tests/CodeBrix.RustTools.CrateBuilder.Tests):
     below) when cargo / rustc, a usable Docker engine, the dotnet CLI, the
     CodeBrix.WebGpu.Native package, a cross toolchain or the network is
     missing - never a passing stub. None of them installs anything.
+  * WINDOWS PATH LIMIT: five live tests reach past 260 characters below
+    the test output folder and skip by name on Windows
+    (Capabilities.SkipOnWindowsPathLimit). The MSVC linker cannot open the
+    cargo build scripts it links (LNK1104) in HostEndToEndTests
+    .a_shared_cargo_target_directory_..., the two .a_webgpu_linked_...
+    tests and FacadeRendererLiveTests.A_webgpu_linked_facade_...; libgit2
+    cannot check this repository out that deep in SourceResolverTests
+    .live_clone_of_the_public_github_repository_at_its_head. Shorter
+    sandbox / scratch roots on Windows would let them run there.
   * Same sandbox rule: never run cargo inside rust-samples/; the host
     readiness test reads a SampleSandbox copy of sample 13.
   * Sources/ and Staging/ tests clone LOCAL upstream repositories made with
@@ -1000,11 +1009,15 @@ Rules the pipeline enforces (fenced by CrateBuilderPipelineTests):
     leaves a target Failed with DefaultArtifactVerifier.NoExportsNote in its
     message (NeedsAutoFallback), the same run generates the facade and calls
     the build driver again (warning + FacadeRecord.Reason =
-    AutoFallbackReason). A generated facade replaces
-    StagedWorkspace.ManifestPath and sets IsFacade; StagedWorkspace.CrateName
-    becomes the plan's LibName (the facade's [lib] name = the native file's
-    base = the wrapper's DllImport name), never the facade's PACKAGE name
-    (FacadeGenerationResult.CrateName, what -p takes).
+    AutoFallbackReason). The verifier counts only
+    DefaultArtifactVerifier.CallableExports: a Windows gnullvm DLL that
+    declares no exports still exports every global symbol (the MinGW
+    linker's auto-export: Rust-mangled _ZN / _R names, ___chkstk_ms,
+    rust_eh_personality), and those are not counted. A generated facade
+    replaces StagedWorkspace.ManifestPath and sets IsFacade;
+    StagedWorkspace.CrateName becomes the plan's LibName (the facade's [lib]
+    name = the native file's base = the wrapper's DllImport name), never the
+    facade's PACKAGE name (FacadeGenerationResult.CrateName, what -p takes).
   * The wrap report is written into the run folder (report/WRAP-REPORT.txt +
     .json) and copied next to the build record in Recording
     (CrateBuildResult.WrapReportPath, BuildRecord.WrapReportFile); the record

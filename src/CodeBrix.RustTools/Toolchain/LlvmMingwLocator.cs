@@ -88,7 +88,7 @@ public static class LlvmMingwLocator
     {
         if (!string.IsNullOrWhiteSpace(explicitDirectory))
         {
-            yield return Path.Combine(explicitDirectory.Trim(), "bin");
+            yield return BinFolderOf(explicitDirectory.Trim());
             yield return explicitDirectory.Trim();
             yield break;
         }
@@ -96,7 +96,7 @@ public static class LlvmMingwLocator
         var home = getEnvironmentVariable(HomeVariable);
         if (!string.IsNullOrWhiteSpace(home))
         {
-            yield return Path.Combine(home.Trim(), "bin");
+            yield return BinFolderOf(home.Trim());
         }
 
         var path = getEnvironmentVariable("PATH");
@@ -107,5 +107,13 @@ public static class LlvmMingwLocator
                 yield return folder;
             }
         }
+    }
+
+    // Joins with the folder's own separator, as the link profiles join their tool paths, so a
+    // folder of another machine (/opt/llvm-mingw described on a Windows host) keeps its style.
+    private static string BinFolderOf(string directory)
+    {
+        var separator = directory.Contains('\\') && !directory.Contains('/') ? "\\" : "/";
+        return directory.TrimEnd('/', '\\') + separator + "bin";
     }
 }

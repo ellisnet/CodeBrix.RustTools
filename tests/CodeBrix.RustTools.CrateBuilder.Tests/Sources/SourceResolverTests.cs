@@ -457,6 +457,7 @@ public class SourceResolverTests
     public async Task live_clone_of_the_public_github_repository_at_its_head()
     {
         //Arrange
+        Capabilities.SkipOnWindowsPathLimit("libgit2 cannot check out this repository's deepest files (path too long)");
         if (!await Capabilities.CanReachGitHubAsync())
         {
             Assert.Skip("No network route to github.com:443 (3 shared probes of 20 s timed out or were refused); the live GitHub clone test needs the internet.");

@@ -11,7 +11,8 @@ namespace CodeBrix.RustTools.CrateBuilder.Tests.Helpers;
 /// <summary>
 /// Dynamic skips for live tests: cargo (through CodeBrix.RustTools' own detection) and a
 /// usable Docker engine (through CodeBrix.RustTools.Docker's engine check), and a network route
-/// to GitHub. Each is detected once per test run.
+/// to GitHub. Each is detected once per test run. Tests that go too deep for Windows' path
+/// limit skip there.
 /// </summary>
 internal static class Capabilities
 {
@@ -65,6 +66,17 @@ internal static class Capabilities
         }
 
         return false;
+    }
+
+    /// <summary>Skips the test on Windows, where it goes past the 260-character path limit
+    /// (MAX_PATH) below the test output folder.</summary>
+    /// <param name="what">What fails that deep, for the skip message.</param>
+    public static void SkipOnWindowsPathLimit(string what)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows' 260-character path limit (MAX_PATH) is reached below the test output folder: " + what + ".");
+        }
     }
 
     /// <summary>Skips the test unless the Docker engine is usable.</summary>

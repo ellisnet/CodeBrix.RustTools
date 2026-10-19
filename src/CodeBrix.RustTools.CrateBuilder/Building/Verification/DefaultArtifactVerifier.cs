@@ -9,7 +9,7 @@ namespace CodeBrix.RustTools.CrateBuilder.Building.Verification;
 /// <summary>
 /// The verifier every build runs unless told otherwise: the file exists, it is the target's
 /// format and architecture, and - when the crate is a cdylib (or a generated facade) - it
-/// exports at least one symbol. Its notes name the file's own library name, the libraries it
+/// exports at least one symbol .NET can call (<see cref="CallableExports"/>). Its notes name the file's own library name, the libraries it
 /// loads (NEEDED / imports / LC_LOAD_DYLIB), the export count and, for ELF, the highest glibc
 /// symbol version it needs, so later verifiers and people can inspect them.
 /// </summary>
@@ -79,10 +79,12 @@ internal sealed class DefaultArtifactVerifier : IArtifactVerifier
             notes.Add($"{name}: {AndroidApiLevelNote} {info.AndroidApiLevel.Value} (it loads on that Android version and later).");
         }
 
-        if (RequiresExports(workspace) && info.ExportedSymbols.Count == 0)
+        if (RequiresExports(workspace) && CallableExports(info).Count == 0)
         {
             ok = false;
-            notes.Add($"{name}: {NoExportsNote}, so .NET could not call into it (a cdylib needs #[unsafe(no_mangle)] pub extern \"C\" functions).");
+            notes.Add(info.ExportedSymbols.Count == 0
+                ? $"{name}: {NoExportsNote}, so .NET could not call into it (a cdylib needs #[unsafe(no_mangle)] pub extern \"C\" functions)."
+                : $"{name}: {NoExportsNote} of its own, so .NET could not call into it: its {info.ExportedSymbols.Count} export(s) are Rust's mangled and runtime symbols, which the MinGW linker exports when a Windows DLL declares none (a cdylib needs #[unsafe(no_mangle)] pub extern \"C\" functions).");
         }
 
         notes.AddRange(info.Notes.Select(n => name + ": " + n));
@@ -101,6 +103,22 @@ internal sealed class DefaultArtifactVerifier : IArtifactVerifier
         var types = workspace.Identity?.CrateTypes;
         return types == null || types.Count == 0 || types.Contains("cdylib", StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// The exports .NET could call by name: every export except Rust-mangled names (legacy
+    /// <c>_ZN…</c>, v0 <c>_R…</c>), reserved compiler and runtime names (<c>__…</c>) and
+    /// <c>rust_eh_personality</c>. A Windows gnullvm DLL that declares no exports still holds
+    /// those, because the MinGW linker (llvm-mingw's lld) then exports every global symbol;
+    /// ELF and Mach-O libraries list only what the crate exports.
+    /// </summary>
+    public static IReadOnlyList<string> CallableExports(NativeArtifactInfo info)
+        => (info?.ExportedSymbols ?? Array.Empty<string>()).Where(s => !IsRustRuntimeExport(s)).ToList();
+
+    private static bool IsRustRuntimeExport(string symbol)
+        => symbol.StartsWith("_ZN", StringComparison.Ordinal)
+            || symbol.StartsWith("_R", StringComparison.Ordinal)
+            || symbol.StartsWith("__", StringComparison.Ordinal)
+            || symbol == "rust_eh_personality";
 
     /// <summary>The highest <c>GLIBC_x.y[.z]</c> version an ELF file needs, or <c>null</c>
     /// when it needs none.</summary>

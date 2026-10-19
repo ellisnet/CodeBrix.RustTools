@@ -118,11 +118,12 @@ public class SharedCargoTargetTests
     {
         //Arrange
         var options = new CrateBuilderOptions { CargoTargetDirectory = "/data/target" };
+        var docker = Path.Combine(Path.GetFullPath("/data/target"), "docker"); // \data\target on the current drive on Windows
 
         //Assert
-        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxX64).Should().Be(Path.Combine("/data/target", "docker", "manylinux-x86_64"));
-        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxArm64).Should().Be(Path.Combine("/data/target", "docker", "manylinux-aarch64"));
-        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxRiscV64).Should().Be(Path.Combine("/data/target", "docker", "manylinux-riscv64"));
+        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxX64).Should().Be(Path.Combine(docker, "manylinux-x86_64"));
+        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxArm64).Should().Be(Path.Combine(docker, "manylinux-aarch64"));
+        SharedCargoTarget.ManyLinuxFolderFor(options, CrateTarget.LinuxRiscV64).Should().Be(Path.Combine(docker, "manylinux-riscv64"));
         SharedCargoTarget.ManyLinuxFolderFor(new CrateBuilderOptions(), CrateTarget.LinuxArm64).Should().BeNull();
     }
 }
