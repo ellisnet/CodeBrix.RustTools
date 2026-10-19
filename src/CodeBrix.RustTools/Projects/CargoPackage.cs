@@ -139,8 +139,14 @@ public sealed class CargoPackage
             AutoTests = AutoTests,
             AutoBenches = AutoBenches,
             InheritedFields = InheritedFields,
+            Workspace = Workspace,
         };
     }
+
+    /// <summary>The <c>workspace</c> key: the path (relative to the package folder) of the
+    /// workspace root this package belongs to, or <c>null</c> when the root is found by searching
+    /// the parent folders.</summary>
+    public string Workspace { get; init; }
 
     /// <inheritdoc />
     public override string ToString() => Version == null ? Name ?? "[workspace.package]" : $"{Name} v{Version}";

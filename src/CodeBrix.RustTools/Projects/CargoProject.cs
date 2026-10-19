@@ -77,8 +77,10 @@ public sealed class CargoProject
     public CargoPackage EffectivePackage => Manifest.Package?.WithInheritance(WorkspaceRootManifest?.Workspace?.Package);
 
     /// <summary>
-    /// The member folders of the workspace whose root is this manifest (globs expanded,
-    /// excludes removed; the root folder itself first when the root also has a
+    /// The member folders of the workspace whose root is this manifest, by cargo's rule
+    /// (<see cref="CargoProjectLocator.FindWorkspaceMembers"/>: globs expanded, excludes removed
+    /// unless the entry is a literal member, implicit members - path dependencies inside the
+    /// workspace folder - added; the root folder itself first when the root also has a
     /// <c>[package]</c>). Empty when this manifest is not a workspace root.
     /// </summary>
     public IReadOnlyList<string> WorkspaceMemberDirectories
@@ -96,7 +98,7 @@ public sealed class CargoProject
                 members.Add(Directory);
             }
 
-            members.AddRange(CargoProjectLocator.ExpandWorkspaceMembers(Directory, Manifest.Workspace)
+            members.AddRange(CargoProjectLocator.FindWorkspaceMembers(Directory, Manifest)
                 .Where(m => !CargoProjectLocator.PathEquals(m, Directory)));
             return members;
         }

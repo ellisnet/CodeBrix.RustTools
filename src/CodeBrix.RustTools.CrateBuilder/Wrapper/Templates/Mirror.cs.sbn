@@ -1,0 +1,14 @@
+using System;
+using System.Text;
+
+namespace {{ model.root_namespace }};
+
+{{~ for line in item.doc_lines ~}}
+{{ line }}
+{{~ end ~}}
+public readonly partial record struct {{ item.name }}
+{
+{{~ for line in item.body_lines ~}}
+{{ line }}
+{{~ end ~}}
+}

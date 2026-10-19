@@ -457,9 +457,9 @@ public class CargoOutputCollectorTests
         var collector = new CargoOutputCollector(CargoCommand.Build, new CargoBuildOptions { ExpectedCrateCount = 2 }, progress.Add);
 
         //Act
-        collector.OnStandardErrorLine("   Compiling craft_core v0.1.0 (/work/craft_core)");
+        collector.OnStandardErrorLine("   Compiling data_core v0.1.0 (/work/data_core)");
         collector.OnStandardErrorLine("   Compiling orbit_tools v0.1.0 (/work/orbit_tools)");
-        collector.OnStandardOutputLine(Artifact("craft_core", "lib"));
+        collector.OnStandardOutputLine(Artifact("data_core", "lib"));
         collector.OnStandardErrorLine(FinishedLine);
         collector.OnStandardOutputLine(Artifact("orbit_tools", "lib"));
         collector.OnStandardOutputLine(BuildFinished);
@@ -480,7 +480,7 @@ public class CargoOutputCollectorTests
         //Arrange
         var progress = new List<CargoProgress>();
         var collector = new CargoOutputCollector(CargoCommand.Build, null, progress.Add);
-        collector.OnStandardOutputLine(Artifact("craft_core", "lib"));
+        collector.OnStandardOutputLine(Artifact("data_core", "lib"));
         collector.OnStandardOutputLine(BuildFinished);
 
         //Act

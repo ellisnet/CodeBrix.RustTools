@@ -62,7 +62,7 @@ public sealed class CargoRunner
     /// rustfmt component needed by <see cref="CargoCommand.Clippy"/> /
     /// <see cref="CargoCommand.Fmt"/> is not installed (the exception carries install
     /// guidance).</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="CargoBuildOptions.ThrowOnCancellation"/> is true.</exception>
     public async Task<CargoCommandResult> RunAsync(string projectDirectory, CargoCommand command, CargoBuildOptions options = null, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
     {

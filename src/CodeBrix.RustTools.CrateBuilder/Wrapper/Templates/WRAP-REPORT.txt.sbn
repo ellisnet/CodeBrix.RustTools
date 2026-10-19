@@ -1,0 +1,21 @@
+WRAP REPORT: {{ model.assembly_name }}
+================================================================================
+
+Written by the wrapper writer because no wrap report came from the facade stage.
+
+Wrapped:
+{{~ for section in model.api_sections ~}}
+  {{ section.title }}
+{{~ for entry in section.entries ~}}
+    {{ entry.signature }}{{ if entry.rust_path }}    <- {{ entry.rust_path }}{{ end }}
+{{~ end ~}}
+{{~ end ~}}
+
+Not wrapped:
+{{~ if model.skipped.empty? ~}}
+  (nothing)
+{{~ else ~}}
+{{~ for item in model.skipped ~}}
+  {{ item.rust_path }}: {{ item.reason }}
+{{~ end ~}}
+{{~ end ~}}

@@ -1,0 +1,80 @@
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+
+namespace {{ model.root_namespace }};
+
+{{~ for line in item.doc_lines ~}}
+{{ line }}
+{{~ end ~}}
+public sealed unsafe partial class {{ item.name }} : IDisposable
+{
+    private readonly object _sync = new object();
+    private readonly {{ item.safe_handle_name }} _handle;
+{{~ if item.has_consuming_method ~}}
+    private bool _consumed;
+{{~ end ~}}
+
+    private {{ item.name }}({{ item.safe_handle_name }} handle)
+    {
+        _handle = handle;
+    }
+{{~ for line in item.body_lines ~}}
+{{ line }}
+{{~ end ~}}
+
+    /// <summary>Releases the native object. Calling it again does nothing.</summary>
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            _handle.Dispose();
+        }
+    }
+
+    internal static {{ item.name }} FromNative(nint handle) => new {{ item.name }}(FromNativeHandle(handle));
+
+    internal static {{ item.safe_handle_name }} FromNativeHandle(nint handle)
+        => handle == 0
+            ? throw new {{ model.exception_class_name }}((int){{ model.native_class_name }}.Status.UpstreamError, "The native library returned no {{ item.name }} object.")
+            : new {{ item.safe_handle_name }}(handle);
+
+    /// <summary>Takes a reference on the native object for one call (pair with
+    /// <see cref="ReleaseNativeHandle"/>).</summary>
+    internal nint AcquireNativeHandle()
+    {
+        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
+{{~ if item.has_consuming_method ~}}
+        if (_consumed)
+        {
+            throw new InvalidOperationException("This {{ item.name }} was consumed by an earlier call; only Dispose may be called now.");
+        }
+{{~ end ~}}
+
+        var added = false;
+        _handle.DangerousAddRef(ref added);
+        return _handle.DangerousGetHandle();
+    }
+
+    /// <summary>Gives back the reference taken by <see cref="AcquireNativeHandle"/>.</summary>
+    internal void ReleaseNativeHandle() => _handle.DangerousRelease();
+}
+
+/// <summary>
+/// Owns the native pointer of one <see cref="{{ item.name }}"/> and destroys it exactly once.
+/// </summary>
+internal sealed class {{ item.safe_handle_name }} : SafeHandleZeroOrMinusOneIsInvalid
+{
+    internal {{ item.safe_handle_name }}(nint handle)
+        : base(ownsHandle: true)
+    {
+        SetHandle(handle);
+    }
+
+    protected override bool ReleaseHandle()
+    {
+        {{ model.native_class_name }}.{{ item.destroy_function }}(handle);
+        return true;
+    }
+}

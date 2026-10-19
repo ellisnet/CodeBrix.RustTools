@@ -188,6 +188,11 @@ DockerRustWorkbench - THE ENTRY POINT
             string hostDirectory, IEnumerable<string> extraExcludes = null,
             IProgress<SourceCopyProgress> progress = null,
             CancellationToken ct = default);
+        Task<SourceCopyResult> CopySourceIntoAsync(BuildContainer container,
+            string hostDirectory, string containerSubdirectory,
+            IEnumerable<string> extraExcludes = null,
+            IProgress<SourceCopyProgress> progress = null,
+            CancellationToken ct = default);
         Task<CargoCommandResult> RunCargoAsync(BuildContainer container,
             CargoCommand command, CargoBuildOptions options = null,
             CrossTarget target = CrossTarget.LinuxX64,
@@ -671,11 +676,15 @@ AndroidArm64 / AndroidX64: the layer downloads the Android NDK (the LTS
   `cargo build --target <triple>` directly, with the variables that point
   cargo and C build scripts at the NDK (CC_, CXX_, AR_, RANLIB_<triple> and
   CARGO_TARGET_<TRIPLE>_LINKER / _AR pointing at the NDK's
-  <triple>24-clang and llvm-ar, and BINDGEN_EXTRA_CLANG_ARGS_<triple> =
-  "--target=<triple>24 --sysroot=<NDK sysroot>" for crates whose build
+  <triple><level>-clang and llvm-ar, and BINDGEN_EXTRA_CLANG_ARGS_<triple> =
+  "--target=<triple><level> --sysroot=<NDK sysroot>" for crates whose build
   script runs bindgen - recent NDKs refuse the bare triple bindgen passes;
   bindgen also needs libclang in the image: AptPackages = { "libclang-dev" })
-  - Android API level 24 (Android 7.0). They
+  - Android API level 24 (Android 7.0) by default; another level with
+  ContainerBuildRequest.AndroidApiLevel (one-call builds) or
+  BuildContainerOptions.AndroidApiLevel / BuildContainer.AndroidApiLevel
+  (step by step; for example 33 for a library that links a native package
+  built for Android 13). They
   come from CodeBrix.RustTools.AndroidLinkProfile, the same type the sibling
   package applies to a host's own NDK, so a container and a host set
   identical variables. The cargo-ndk tool is neither installed nor used: it
@@ -770,9 +779,10 @@ MacOSArm64 / MacOSX64 / MacOSUniversal: DEVELOPMENT AND TESTING ONLY.
   Limits: pure-Rust dependency trees only (a crate that compiles C - the cc
   crate, rusqlite "bundled", aws-lc-rs - needs Apple's headers and so needs
   a Mac); nothing that links an Apple framework beyond libSystem; ad-hoc
-  signatures only, no signing identity, no notarisation. A RUSTFLAGS
-  variable in CargoBuildOptions.Environment would override the per-target
-  rustflags the layer relies on, so do not set one for macOS targets. The
+  signatures only, no signing identity, no notarisation. The per-target
+  CARGO_TARGET_<TRIPLE>_RUSTFLAGS in CargoBuildOptions.Environment EXTENDS
+  the layer's own flags (they come first); a plain RUSTFLAGS variable would
+  override them, so do not set that one for macOS targets. The
   first image build downloads the two Darwin targets and llvm-tools from
   static.rust-lang.org and takes well under a minute.
 
@@ -789,6 +799,9 @@ CONTAINERS (CodeBrix.RustTools.Docker.Containers)
         IList<MountSpec> Mounts { get; set; }         // CodeBrix.Docker
         string TargetVolumeName { get; set; } // null => <name>-target
         bool NetworkDisabled { get; set; }    // false; true => network mode "none"
+        int AndroidApiLevel { get; set; }     // 24; the container's starting
+                                              // BuildContainer.AndroidApiLevel
+                                              // (not part of the reuse key)
         BuildContainerOptions Clone();
     }
 
@@ -803,6 +816,8 @@ CONTAINERS (CodeBrix.RustTools.Docker.Containers)
         string CacheVolumeName; string CacheGitVolumeName;  // + "-git"
         string TargetVolumeName; string ReuseKey;
         bool WasReused; bool KeepOnDispose { get; set; }
+        int AndroidApiLevel { get; set; }    // Android targets are linked for
+                                             // it; 21 or later
         bool IsRunning; bool IsRemoved;
 
         Task<bool> RefreshStateAsync(CancellationToken ct = default);
@@ -896,6 +911,14 @@ SOURCE COPY (CopySourceAsync)
     is relative to hostDirectory ("docs/build"); a trailing slash means
     folders only; "**" crosses folders. Case sensitive.
   - Unix permission bits travel with the files from a Linux or macOS host.
+  - CopySourceIntoAsync(container, hostDirectory, containerSubdirectory, ...)
+    copies into /work/<containerSubdirectory> instead and empties ONLY that
+    folder first, so two inputs (a tool and a project, say) can sit side by
+    side in one container. The sub-folder is relative ("tools/x", "./x",
+    ".hidden/x") or absolute below /work ("/work/x"); /work itself, the
+    target volume (/work/target and below) and ".." are rejected with
+    ArgumentException. Run cargo there with options.WorkingDirectory = the
+    same sub-folder.
 
 CARGO IN THE CONTAINER (RunCargoAsync, TestAsync, GetMetadataAsync)
 -------------------------------------------------------------------
@@ -917,10 +940,16 @@ CARGO IN THE CONTAINER (RunCargoAsync, TestAsync, GetMetadataAsync)
     CARGO_TARGET_DIR=/work/target (the target volume),
     CARGO_TERM_COLOR=never, RUSTUP_AUTO_INSTALL=0, then
     options.Environment (entries whose value is null are ignored - a
-    variable cannot be removed inside the container).
+    variable cannot be removed inside the container). An entry replaces the
+    library's own variable of the same name, EXCEPT the target's
+    CARGO_TARGET_<TRIPLE>_RUSTFLAGS: its flags are appended to the library's
+    flags for that target (Windows +crt-static; the macOS layer's linker
+    flags), so extra flags never drop the ones the target needs.
   - options.WorkingDirectory is a CONTAINER folder here: null = /work, a
     relative path is below /work ("crates/cli" -> /work/crates/cli, for a
-    workspace member), an absolute path is used as is; ".." is rejected.
+    workspace member; only "." segments such as a leading "./" are dropped,
+    so ".hidden/x" -> /work/.hidden/x), an absolute path is used as is;
+    ".." is rejected.
   - target: LinuxNative (the default) and the Linux target that is the
     engine's own keep options.TargetTriple (normally unset = the
     container's own target); every other target sets --target to its
@@ -1089,6 +1118,18 @@ BUILDS (CodeBrix.RustTools.Docker.Builds)
         bool ContinueOnTargetFailure;         // false = stop at the first
         TimeSpan? Timeout;                    // the whole build
         IList<string> ExtraExcludePatterns;   // added to the defaults
+        string CopyRootDirectory;             // null = the Cargo workspace
+                                              // root; a wider host folder to
+                                              // copy into /work (must contain
+                                              // the workspace root; only with
+                                              // ProjectDirectory)
+        int AndroidApiLevel;                  // 24; 21 or later
+        IDictionary<CrossTarget, IDictionary<string, string>>
+            TargetEnvironment;                // extra variables for ONE
+                                              // target's cargo run (keys must
+                                              // be in Targets; MacOSUniversal
+                                              // = both slices); per-target
+                                              // RUSTFLAGS extend the library's
         ContainerBuildRequest Clone();
     }
 
@@ -1718,10 +1759,12 @@ COMMON PITFALLS TO AVOID
      container. There is no init process (no tini, no --init); a program
      you start with ExecAsync that leaves background children behind leaves
      them running until the container is removed.
- 22. DO NOT set RUSTFLAGS (or the per-target RUSTFLAGS variables) in
-     CargoBuildOptions.Environment for a macOS target: cargo lets them
+ 22. DO NOT set the plain RUSTFLAGS variable in
+     CargoBuildOptions.Environment for a macOS target: cargo lets it
      override the linker flavour, -S, the remapping and the install name
      the macOS layer needs, and the link then fails or the bytes differ.
+     Extra flags go in the per-target CARGO_TARGET_<TRIPLE>_RUSTFLAGS,
+     which the library appends to the layer's own.
  23. DO NOT expect a cdylib built for macOS to be independent of its build
      path without an install name: set CargoBuildOptions.MacOSInstallName
      (BuildAsync defaults it for a single-cdylib package).
@@ -1860,6 +1903,12 @@ QUICK REFERENCE CARD
                               Retrieval = new ArtifactRetrievalOptions {
                                   HostDirectory = "out" } })
   Copy source in          await wb.CopySourceAsync(c, dir)
+  Copy beside it          await wb.CopySourceIntoAsync(c, toolDir, "tools/x")
+  Wider copy root         new ContainerBuildRequest { ProjectDirectory = crate,
+                              CopyRootDirectory = stagingRoot }
+  Android at API 33       new ContainerBuildRequest { AndroidApiLevel = 33 }
+  One target's variables  request.TargetEnvironment[CrossTarget.WindowsX64Gnullvm]
+                              = new Dictionary<string, string> { ... }
   Cargo in the container  await wb.RunCargoAsync(c, CargoCommand.Build,
                               options, CrossTarget.WindowsX64Gnullvm)
   Tests                   await wb.TestAsync(c)

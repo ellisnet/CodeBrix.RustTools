@@ -32,6 +32,15 @@ AGENT-README FILES (consumer documentation, one per NuGet package)
       CodeBrix.RustTools, where Apple's toolchain, SDK and code signing
       are available under Apple's own license terms.
 
+  src/CodeBrix.RustTools.CrateBuilder/AGENT-README.txt
+      CodeBrix.RustTools.CrateBuilder.MitLicenseForever - turn a Rust crate
+      (a local Cargo.toml, or a Git repository cloned with CodeBrix.LibGit2)
+      into native binaries for chosen runtime identifiers, built with the
+      installed toolchain or in Docker, plus a JSON build record and
+      optionally a .NET 10 wrapper class library (readiness check first,
+      CodeBrix WebGPU linking, C facade generation for plain Rust
+      libraries).
+
 MAINTAINER AND EXTRAS
 ---------------------
   MAINTAINER-README.txt
@@ -47,10 +56,13 @@ GENERAL
       CodeBrix.RustTools.MitLicenseForever.
   src/CodeBrix.RustTools.Docker/README.md
       The nuget.org page of CodeBrix.RustTools.Docker.MitLicenseForever.
+  src/CodeBrix.RustTools.CrateBuilder/README.md
+      The nuget.org page of
+      CodeBrix.RustTools.CrateBuilder.MitLicenseForever.
   README-INDEX.txt
       This file.
   THIRD-PARTY-NOTICES.txt
-      What came from where, and under which licences. Packed into both
-      nupkgs.
+      What came from where, and under which licences. Packed into every
+      nupkg.
 
 ================================================================================

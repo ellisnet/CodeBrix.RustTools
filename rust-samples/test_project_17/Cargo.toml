@@ -1,0 +1,13 @@
+[package]
+name = "hardcrate"
+version = "0.1.0"
+edition = "2024"
+description = "Plain Rust library (rlib) whose public API is mostly not mappable to a C facade automatically"
+license = "MIT"
+publish = false
+
+[features]
+default = []
+extra = []
+
+[dependencies]

@@ -1,0 +1,24 @@
+using System;
+
+namespace {{ model.root_namespace }};
+
+/// <summary>
+/// Thrown when a call into the {{ model.lib_name }} library fails: the Rust function returned an error
+/// (the message is the error's text), an argument was rejected by the native side, or the Rust
+/// code panicked (the message is the panic's text).
+/// </summary>
+public sealed class {{ model.exception_class_name }} : Exception
+{
+    internal {{ model.exception_class_name }}(int status, string message)
+        : base(message)
+    {
+        Status = status;
+    }
+
+    /// <summary>
+    /// The native status code: -1 a required argument was null, -2 an argument was invalid (a
+    /// length, or text that is not UTF-8), -3 the Rust function returned an error, -4 the Rust code
+    /// panicked, -5 the object was consumed by an earlier call.
+    /// </summary>
+    public int Status { get; }
+}

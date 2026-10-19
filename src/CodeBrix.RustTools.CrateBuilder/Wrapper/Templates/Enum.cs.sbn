@@ -1,0 +1,11 @@
+namespace {{ model.root_namespace }};
+
+{{~ for line in item.doc_lines ~}}
+{{ line }}
+{{~ end ~}}
+public enum {{ item.name }} : {{ item.underlying_type }}
+{
+{{~ for line in item.body_lines ~}}
+{{ line }}
+{{~ end ~}}
+}

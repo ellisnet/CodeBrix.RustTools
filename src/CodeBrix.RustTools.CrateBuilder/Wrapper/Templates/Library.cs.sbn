@@ -1,0 +1,18 @@
+using System;
+using System.Text;
+
+namespace {{ model.root_namespace }};
+
+/// <summary>
+{{~ if model.is_pass_through ~}}
+/// The C functions exported by the Rust crate {{ model.crate_name }}, one static method each.
+{{~ else ~}}
+/// The free functions of the Rust crate {{ model.crate_name }}.
+{{~ end ~}}
+/// </summary>
+public static unsafe partial class {{ model.lib_class_name }}
+{
+{{~ for line in model.free_function_lines ~}}
+{{ line }}
+{{~ end ~}}
+}

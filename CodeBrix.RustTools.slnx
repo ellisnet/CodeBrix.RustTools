@@ -12,9 +12,11 @@
     <File Path="THIRD-PARTY-NOTICES.txt" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="tests/CodeBrix.RustTools.CrateBuilder.Tests/CodeBrix.RustTools.CrateBuilder.Tests.csproj" />
     <Project Path="tests/CodeBrix.RustTools.Docker.Tests/CodeBrix.RustTools.Docker.Tests.csproj" />
     <Project Path="tests/CodeBrix.RustTools.Tests/CodeBrix.RustTools.Tests.csproj" />
   </Folder>
+  <Project Path="src/CodeBrix.RustTools.CrateBuilder/CodeBrix.RustTools.CrateBuilder.csproj" />
   <Project Path="src/CodeBrix.RustTools.Docker/CodeBrix.RustTools.Docker.csproj" />
   <Project Path="src/CodeBrix.RustTools/CodeBrix.RustTools.csproj" />
 </Solution>

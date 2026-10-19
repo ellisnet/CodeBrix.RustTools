@@ -1,0 +1,12 @@
+using System.Runtime.CompilerServices;
+
+namespace {{ model.root_namespace }};
+
+{{~ for line in item.doc_lines ~}}
+{{ line }}
+{{~ end ~}}
+[InlineArray({{ item.length }})]
+public struct {{ item.name }}
+{
+    private {{ item.element_type }} _element0;
+}

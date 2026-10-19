@@ -1,0 +1,15 @@
+[package]
+name = "wgpu_link_probe"
+version = "0.1.0"
+edition = "2024"
+description = "Native library (cdylib) that links dynamically to the CodeBrix WebGPU engine (codebrix_wgpu)"
+license = "MIT"
+publish = false
+build = "build.rs"
+
+# cdylib only: the module is loaded by .NET after CodeBrixWebGpuNative.EnsureLoaded(), and
+# links to the codebrix_wgpu library .NET already loaded (it never bundles an engine).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]

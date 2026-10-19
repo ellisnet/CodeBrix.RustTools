@@ -1,0 +1,70 @@
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+{{~ if model.links_web_gpu ~}}
+using CodeBrix.WebGpu.Native;
+{{~ end ~}}
+using Xunit;
+
+namespace {{ model.root_namespace }}.SmokeTests;
+
+/// <summary>
+/// Generated smoke tests for {{ model.assembly_name }} (xUnit): the native library loads and every
+/// export resolves{{ if !model.parameterless_constructions.empty? }}; objects that need no arguments can be created and disposed{{ end }}.
+/// Copy this file into a test project that references {{ model.assembly_name }}.
+/// </summary>
+public class {{ model.lib_class_name }}SmokeTests
+{
+    private static readonly string[] Exports =
+    {
+{{~ for export in model.exports ~}}
+        "{{ export }}",
+{{~ end ~}}
+    };
+
+    [Fact]
+    public void the_native_library_loads_and_every_export_resolves()
+    {
+{{~ if model.links_web_gpu ~}}
+        CodeBrixWebGpuNative.EnsureLoaded();
+{{~ end ~}}
+        var architecture = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
+        var rid = (OperatingSystem.IsAndroid() ? "android-" : OperatingSystem.IsWindows() ? "win-" : OperatingSystem.IsMacOS() ? "osx-" : "linux-") + architecture;
+        var fileName = rid switch
+        {
+{{~ for runtime in model.runtimes ~}}
+            "{{ runtime.rid }}" => "{{ runtime.file_name }}",
+{{~ end ~}}
+            _ => OperatingSystem.IsWindows() ? "{{ model.lib_name }}.dll" : OperatingSystem.IsMacOS() ? "lib{{ model.lib_name }}.dylib" : "lib{{ model.lib_name }}.so",
+        };
+        var path = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", fileName);
+        Assert.True(File.Exists(path), "missing " + path);
+
+        var library = NativeLibrary.Load(path);
+        try
+        {
+            foreach (var export in Exports)
+            {
+                Assert.True(NativeLibrary.TryGetExport(library, export, out _), "export not found: " + export);
+            }
+        }
+        finally
+        {
+            NativeLibrary.Free(library);
+        }
+    }
+{{~ if !model.parameterless_constructions.empty? ~}}
+
+    [Fact]
+    public void objects_that_need_no_arguments_can_be_created_and_disposed()
+    {
+{{~ for construction in model.parameterless_constructions ~}}
+        using (var value = {{ construction }})
+        {
+            Assert.NotNull(value);
+        }
+
+{{~ end ~}}
+    }
+{{~ end ~}}
+}

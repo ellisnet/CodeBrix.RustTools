@@ -73,6 +73,11 @@ public class DockerRustWorkbenchBuildTests
     [InlineData("", "/work")]
     [InlineData("crates/cli", "/work/crates/cli")]
     [InlineData("./crates/cli/", "/work/crates/cli")]
+    [InlineData(".codebrix-facade/x_facade", "/work/.codebrix-facade/x_facade")]
+    [InlineData("./.codebrix-facade/x_facade/", "/work/.codebrix-facade/x_facade")]
+    [InlineData("crates/./cli", "/work/crates/cli")]
+    [InlineData(".", "/work")]
+    [InlineData("./", "/work")]
     [InlineData("/opt/src", "/opt/src")]
     [InlineData("/", "/")]
     public void ResolveContainerDirectory_maps_relative_paths_below_work(string workingDirectory, string expected)
@@ -115,5 +120,43 @@ public class DockerRustWorkbenchBuildTests
         script.Should().Contain("/work/target ] && continue");
         script.Should().Contain("mountpoint -q");
         script.Should().Contain("rm -rf");
+    }
+
+    [Theory]
+    [InlineData("tool", "/work/tool")]
+    [InlineData("./staged/crate/", "/work/staged/crate")]
+    [InlineData(".codebrix-facade", "/work/.codebrix-facade")]
+    [InlineData("/work/staged", "/work/staged")]
+    public void ResolveCopySubdirectory_maps_below_work(string subdirectory, string expected)
+        => DockerRustWorkbench.ResolveCopySubdirectory(subdirectory).Should().Be(expected);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(".")]
+    [InlineData("/work")]
+    [InlineData("/opt/x")]
+    [InlineData("target")]
+    [InlineData("/work/target/release")]
+    [InlineData("a/../b")]
+    public void ResolveCopySubdirectory_rejects_work_itself_the_target_volume_and_outside_paths(string subdirectory)
+    {
+        //Act
+        var act = () => DockerRustWorkbench.ResolveCopySubdirectory(subdirectory);
+
+        //Assert
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void ClearSubdirectoryCommand_passes_the_folder_as_an_argument()
+    {
+        //Act
+        var command = DockerRustWorkbench.ClearSubdirectoryCommand("/work/tool");
+
+        //Assert
+        command[0].Should().Be("sh");
+        command[2].Should().Contain("mkdir -p");
+        command[2].Should().NotContain("/work/tool");
+        command[^1].Should().Be("/work/tool");
     }
 }

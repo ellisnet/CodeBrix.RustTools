@@ -1,0 +1,54 @@
+# =============================================================================================
+# Containerfile.x86_64 - CodeBrix.RustTools.CrateBuilder's manylinux build image for linux-x64
+# =============================================================================================
+#
+# LinuxBaseline.ManyLinux builds the linux-x64 library in this image instead of the official
+# rust image (Debian), so the result needs only glibc 2.28 (Debian 10+, Ubuntu 20.04+,
+# RHEL 8+) instead of the glibc of a current Debian release.
+#
+# Base: the digest-pinned manylinux_2_28 image (AlmaLinux 8, gcc toolset, glibc 2.28), the
+# same image and digest the CodeBrix native libraries are built on. The FROM line resolves to
+# the digest, so a retag upstream cannot change the base under a rebuild.
+#
+# Added: Rust, installed with rustup-init at a pinned rustup release (the download is checked
+# against a pinned SHA-256), with the toolchain named by RUST_VERSION and the minimal profile,
+# into the official rust image's layout (RUSTUP_HOME=/usr/local/rustup,
+# CARGO_HOME=/usr/local/cargo) so CodeBrix.RustTools.Docker's cargo cache volumes mount where
+# cargo looks for them. Nothing else is installed.
+#
+# CodeBrix.RustTools.CrateBuilder passes every ARG below as a build argument; the defaults
+# only keep a hand-run `docker build -f Containerfile.x86_64 .` working.
+# =============================================================================================
+
+ARG BASE_IMAGE=quay.io/pypa/manylinux_2_28_x86_64@sha256:a61875a2f84cab7df8de222ff12cabc08ff86eb4ad402ac90ba7bdaed9600cca
+FROM ${BASE_IMAGE}
+
+ARG RUST_VERSION=1.99.0
+ARG RUSTUP_VERSION=1.29.1
+ARG RUSTUP_INIT_SHA256=dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71
+ARG RUSTUP_HOST=x86_64-unknown-linux-gnu
+
+LABEL org.opencontainers.image.title="codebrix-cratebuilder-manylinux-x86_64"
+LABEL org.opencontainers.image.description="CodeBrix.RustTools.CrateBuilder linux-x64 build image: manylinux_2_28_x86_64 + rustup + Rust"
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN set -eux; \
+    url="https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_HOST}/rustup-init"; \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/rustup-init "$url"; \
+    echo "${RUSTUP_INIT_SHA256}  /tmp/rustup-init" | sha256sum -c -; \
+    chmod +x /tmp/rustup-init; \
+    /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain "${RUST_VERSION}" --default-host "${RUSTUP_HOST}"; \
+    rm -f /tmp/rustup-init; \
+    chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}"; \
+    rustup --version; \
+    cargo --version; \
+    rustc --version; \
+    cc --version | sed -n 1p; \
+    ldd --version | sed -n 1p; \
+    command -v setsid
+
+WORKDIR /work
+ENV CARGO_TERM_COLOR=never RUSTUP_AUTO_INSTALL=0

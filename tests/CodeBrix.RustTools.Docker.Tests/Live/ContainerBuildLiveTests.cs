@@ -563,4 +563,75 @@ public class ContainerBuildLiveTests
 
     private static IReadOnlyList<string> Relative(ArtifactRetrievalResult result)
         => result.Artifacts.Select(a => Path.GetRelativePath(result.HostDirectory, a.HostPath).Replace('\\', '/')).ToList();
+
+    [Fact]
+    public async Task CopySourceIntoAsync_fills_one_sub_folder_and_leaves_the_rest_of_work_alone()
+    {
+        //Arrange
+        using var project = SampleSandbox.FromSample(5);
+        using var tool = SampleSandbox.CreateEmpty();
+        tool.WriteFile("Cargo.toml", "[package]\nname = \"tool\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+        tool.WriteFile("src/main.rs", "fn main() {}\n");
+        tool.WriteFile("old.txt", "first copy");
+        await using var container = await Workbench.StartContainerAsync(_fixture.BaseImage, null, TestContext.Current.CancellationToken);
+        var transport = new DockerCopyTransport(Workbench.Client, container.Id);
+        await Workbench.CopySourceIntoAsync(container, tool.Directory, "tools/x", null, null, TestContext.Current.CancellationToken);
+        File.Delete(Path.Combine(tool.Directory, "old.txt"));
+
+        //Act
+        await Workbench.CopySourceAsync(container, project.Directory, null, null, TestContext.Current.CancellationToken);
+        var lost = await transport.StatAsync("/work/tools/x/Cargo.toml", TestContext.Current.CancellationToken);
+        await Workbench.CopySourceIntoAsync(container, tool.Directory, "tools/x", null, null, TestContext.Current.CancellationToken);
+        var copy = await Workbench.CopySourceIntoAsync(container, tool.Directory, "./.hidden/x", null, null, TestContext.Current.CancellationToken);
+        var build = await Workbench.RunCargoAsync(container, CargoCommand.Build, new CargoBuildOptions { WorkingDirectory = "tools/x" }, _fixture.NativeTarget, null, TestContext.Current.CancellationToken);
+
+        //Assert
+        lost.Exists.Should().BeFalse();
+        copy.ContainerDirectory.Should().Be("/work/.hidden/x");
+        (await transport.StatAsync("/work/Cargo.toml", TestContext.Current.CancellationToken)).Exists.Should().BeTrue();
+        (await transport.StatAsync("/work/vendor/licensed_by_file/LICENSE.txt", TestContext.Current.CancellationToken)).Exists.Should().BeTrue();
+        (await transport.StatAsync("/work/tools/x/Cargo.toml", TestContext.Current.CancellationToken)).Exists.Should().BeTrue();
+        (await transport.StatAsync("/work/tools/x/old.txt", TestContext.Current.CancellationToken)).Exists.Should().BeFalse();
+        (await transport.StatAsync("/work/.hidden/x/src/main.rs", TestContext.Current.CancellationToken)).Exists.Should().BeTrue();
+        build.Success.Should().BeTrue(build.StandardError);
+        build.WorkingDirectory.Should().Be("/work/tools/x");
+    }
+
+    [Fact]
+    public async Task BuildAsync_copies_the_copy_root_and_applies_the_targets_own_environment()
+    {
+        //Arrange
+        using var stage = SampleSandbox.CreateEmpty();
+        stage.WriteFile("crate/Cargo.toml", "[package]\nname = \"staged_app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nhelper = { path = \"../vendor/helper\" }\n\n[lints.rust]\nunexpected_cfgs = \"allow\"\n");
+        stage.WriteFile("crate/src/main.rs", "#[cfg(not(codebrix_probe))]\ncompile_error!(\"the target environment did not reach rustc\");\n\nfn main() {\n    println!(\"{}\", helper::answer());\n}\n");
+        stage.WriteFile("vendor/helper/Cargo.toml", "[package]\nname = \"helper\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+        stage.WriteFile("vendor/helper/src/lib.rs", "pub fn answer() -> i32 { 42 }\n");
+        var triple = CrossTargetInfo.Get(_fixture.NativeTarget).Triple;
+        var request = new ContainerBuildRequest
+        {
+            ProjectDirectory = Path.Combine(stage.Directory, "crate"),
+            CopyRootDirectory = stage.Directory,
+            Targets = new List<CrossTarget> { CrossTarget.LinuxNative },
+            ContainerOptions = new BuildContainerOptions { NetworkDisabled = true },
+            Options = new CargoBuildOptions { Offline = true },
+        };
+        request.TargetEnvironment[CrossTarget.LinuxNative] = new Dictionary<string, string>
+        {
+            ["CARGO_TARGET_" + triple.ToUpperInvariant().Replace('-', '_') + "_RUSTFLAGS"] = "--cfg codebrix_probe",
+        };
+        var withoutCopyRoot = request.Clone();
+        withoutCopyRoot.CopyRootDirectory = null;
+
+        //Act
+        var result = await Workbench.BuildAsync(request, null, TestContext.Current.CancellationToken);
+        var failed = await Workbench.BuildAsync(withoutCopyRoot, null, TestContext.Current.CancellationToken);
+
+        //Assert
+        result.Success.Should().BeTrue(result.ToString() + string.Join("\n", result.Results.Values.Select(r => r.StandardError)));
+        result.Source.HostDirectory.Should().Be(stage.Directory);
+        result.Source.ContainerDirectory.Should().Be("/work/crate");
+        failed.Success.Should().BeFalse();
+        failed.Source.ContainerDirectory.Should().Be("/work");
+        LogBuild(nameof(BuildAsync_copies_the_copy_root_and_applies_the_targets_own_environment), result);
+    }
 }

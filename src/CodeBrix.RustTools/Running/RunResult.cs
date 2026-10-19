@@ -35,7 +35,7 @@ public sealed class RunResult
     public bool TimedOut { get; init; }
 
     /// <summary>
-    /// True when the program was killed because the cancellation token fired (only when
+    /// True when the program was killed because the cancellation token was cancelled (only when
     /// <see cref="RunOptions.ThrowOnCancellation"/> is false).
     /// </summary>
     public bool WasCancelled { get; init; }

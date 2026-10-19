@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeBrix.Docker;
+using CodeBrix.RustTools.Building;
 using CodeBrix.RustTools.Docker.Images;
 
 namespace CodeBrix.RustTools.Docker.Containers;
@@ -36,6 +37,7 @@ public sealed class BuildContainer : IAsyncDisposable
 
     private readonly DockerClient _client;
     private int _removed;
+    private int _androidApiLevel = AndroidLinkProfile.DefaultApiLevel;
 
     internal BuildContainer(
         DockerClient client,
@@ -91,6 +93,28 @@ public sealed class BuildContainer : IAsyncDisposable
 
     /// <summary>Whether disposing leaves the container (and its target volume) in place.</summary>
     public bool KeepOnDispose { get; set; }
+
+    /// <summary>
+    /// The Android API level cargo links the Android targets for in this container (the NDK's
+    /// <c>&lt;triple&gt;&lt;level&gt;-clang</c> wrappers, see <c>AndroidLinkProfile</c>). Starts
+    /// at <see cref="BuildContainerOptions.AndroidApiLevel"/> (default 24) and may be changed
+    /// between cargo runs.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Set below 21 (the first level with 64-bit
+    /// Android targets).</exception>
+    public int AndroidApiLevel
+    {
+        get => _androidApiLevel;
+        set
+        {
+            if (value < 21)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "64-bit Android targets start at API level 21.");
+            }
+
+            _androidApiLevel = value;
+        }
+    }
 
     /// <summary>Whether the container was running when last observed (at start, after
     /// <see cref="RefreshStateAsync"/>, or after removal).</summary>

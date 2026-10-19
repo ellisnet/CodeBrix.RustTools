@@ -1,0 +1,1073 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "codebrix-api-extractor",
+    "version": "1.0.0"
+  },
+  "crate": {
+    "name": "hardcrate",
+    "version": "0.1.0",
+    "edition": "2024",
+    "libName": "hardcrate",
+    "crateTypes": [
+      "lib"
+    ],
+    "rootKind": "lib",
+    "rootFile": "src/lib.rs",
+    "manifestPath": "test_project_17/Cargo.toml",
+    "packageDirectory": "test_project_17",
+    "declaredFeatures": [
+      "default",
+      "extra"
+    ],
+    "requestedFeatures": [
+      "extra"
+    ],
+    "docs": "hardcrate: a plain Rust library whose public API is made of shapes a C facade cannot map\nautomatically (generics, `impl Trait`, closures, trait objects, borrowed returns, iterators,\ndata-carrying enums, `Vec` of non-`Copy` values, `Rc` / `Arc`, `async`), plus two functions\nthat ARE mappable."
+  },
+  "modules": [
+    {
+      "path": "crate",
+      "name": "crate",
+      "visibility": "pub",
+      "file": "src/lib.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "hardcrate: a plain Rust library whose public API is made of shapes a C facade cannot map\nautomatically (generics, `impl Trait`, closures, trait objects, borrowed returns, iterators,\ndata-carrying enums, `Vec` of non-`Copy` values, `Rc` / `Arc`, `async`), plus two functions\nthat ARE mappable.",
+      "publicPaths": [
+        "crate"
+      ]
+    },
+    {
+      "path": "crate::tests",
+      "name": "tests",
+      "visibility": "private",
+      "file": "src/lib.rs",
+      "isInline": true,
+      "cfg": [
+        "test"
+      ],
+      "docs": "",
+      "publicPaths": []
+    }
+  ],
+  "functions": [
+    {
+      "id": "fn:crate::max_of",
+      "name": "max_of",
+      "canonicalPath": "crate::max_of",
+      "publicPaths": [
+        "crate::max_of"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "The larger of `a` and `b` (generic).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 10,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "a",
+          "type": {
+            "kind": "path",
+            "text": "T",
+            "segments": [
+              {
+                "name": "T",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "kind": "path",
+            "text": "T",
+            "segments": [
+              {
+                "name": "T",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "path",
+        "text": "T",
+        "segments": [
+          {
+            "name": "T",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "unresolved": true
+      },
+      "generics": {
+        "text": "<T: PartialOrd>",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [
+          {
+            "name": "T",
+            "bounds": [
+              "PartialOrd"
+            ]
+          }
+        ],
+        "constParams": []
+      },
+      "hasGenerics": true,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn max_of<T: PartialOrd>(a: T, b: T) -> T"
+    },
+    {
+      "id": "fn:crate::describe",
+      "name": "describe",
+      "canonicalPath": "crate::describe",
+      "publicPaths": [
+        "crate::describe"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Formats anything printable (`impl Trait` parameter).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 15,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "kind": "impl_trait",
+            "text": "impl std::fmt::Display",
+            "bounds": [
+              "std::fmt::Display"
+            ]
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "path",
+        "text": "String",
+        "segments": [
+          {
+            "name": "String",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "unresolved": true
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn describe(value: impl std::fmt::Display) -> String"
+    },
+    {
+      "id": "fn:crate::each",
+      "name": "each",
+      "canonicalPath": "crate::each",
+      "publicPaths": [
+        "crate::each"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Calls `f` for every element (a closure parameter).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 20,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "xs",
+          "type": {
+            "kind": "reference",
+            "text": "&[i32]",
+            "mutable": false,
+            "inner": {
+              "kind": "slice",
+              "text": "[i32]",
+              "elem": {
+                "kind": "primitive",
+                "text": "i32",
+                "name": "i32"
+              }
+            }
+          }
+        },
+        {
+          "name": "f",
+          "type": {
+            "kind": "impl_trait",
+            "text": "impl FnMut(i32)",
+            "bounds": [
+              "FnMut(i32)"
+            ]
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn each(xs: &[i32], mut f: impl FnMut(i32))"
+    },
+    {
+      "id": "fn:crate::apply",
+      "name": "apply",
+      "canonicalPath": "crate::apply",
+      "publicPaths": [
+        "crate::apply"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Applies a trait object to `x`.",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 27,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "f",
+          "type": {
+            "kind": "reference",
+            "text": "&dyn Fn(i32) -> i32",
+            "mutable": false,
+            "inner": {
+              "kind": "dyn_trait",
+              "text": "dyn Fn(i32) -> i32",
+              "bounds": [
+                "Fn(i32) -> i32"
+              ]
+            }
+          }
+        },
+        {
+          "name": "x",
+          "type": {
+            "kind": "primitive",
+            "text": "i32",
+            "name": "i32"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "i32",
+        "name": "i32"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn apply(f: &dyn Fn(i32) -> i32, x: i32) -> i32"
+    },
+    {
+      "id": "fn:crate::evens",
+      "name": "evens",
+      "canonicalPath": "crate::evens",
+      "publicPaths": [
+        "crate::evens"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "The even numbers of `xs` (an iterator return).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 32,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "xs",
+          "type": {
+            "kind": "reference",
+            "text": "&[i32]",
+            "mutable": false,
+            "inner": {
+              "kind": "slice",
+              "text": "[i32]",
+              "elem": {
+                "kind": "primitive",
+                "text": "i32",
+                "name": "i32"
+              }
+            }
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "impl_trait",
+        "text": "impl Iterator<Item = i32> + '_",
+        "bounds": [
+          "Iterator<Item = i32>",
+          "'_"
+        ]
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn evens(xs: &[i32]) -> impl Iterator<Item = i32> + '_"
+    },
+    {
+      "id": "fn:crate::total_area",
+      "name": "total_area",
+      "canonicalPath": "crate::total_area",
+      "publicPaths": [
+        "crate::total_area"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "The total area of `shapes` (a `Vec` of a data-carrying enum in).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 51,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "shapes",
+          "type": {
+            "kind": "path",
+            "text": "Vec<Shape>",
+            "segments": [
+              {
+                "name": "Vec",
+                "args": [
+                  {
+                    "kind": "path",
+                    "text": "Shape",
+                    "segments": [
+                      {
+                        "name": "Shape",
+                        "args": [],
+                        "lifetimes": [],
+                        "constArgs": [],
+                        "bindings": [],
+                        "otherArgs": []
+                      }
+                    ],
+                    "resolved": "crate::Shape"
+                  }
+                ],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "f64",
+        "name": "f64"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn total_area(shapes: Vec<Shape>) -> f64"
+    },
+    {
+      "id": "fn:crate::unit_squares",
+      "name": "unit_squares",
+      "canonicalPath": "crate::unit_squares",
+      "publicPaths": [
+        "crate::unit_squares"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "`n` unit squares (a `Vec` of a data-carrying enum out).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 62,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "n",
+          "type": {
+            "kind": "primitive",
+            "text": "usize",
+            "name": "usize"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "path",
+        "text": "Vec<Shape>",
+        "segments": [
+          {
+            "name": "Vec",
+            "args": [
+              {
+                "kind": "path",
+                "text": "Shape",
+                "segments": [
+                  {
+                    "name": "Shape",
+                    "args": [],
+                    "lifetimes": [],
+                    "constArgs": [],
+                    "bindings": [],
+                    "otherArgs": []
+                  }
+                ],
+                "resolved": "crate::Shape"
+              }
+            ],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "unresolved": true
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn unit_squares(n: usize) -> Vec<Shape>"
+    },
+    {
+      "id": "fn:crate::Names::new",
+      "name": "new",
+      "canonicalPath": "crate::Names::new",
+      "publicPaths": [
+        "crate::Names::new"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Creates a list from `names`.",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 76,
+      "owner": {
+        "typeText": "Names",
+        "type": {
+          "kind": "path",
+          "text": "Names",
+          "segments": [
+            {
+              "name": "Names",
+              "args": [],
+              "lifetimes": [],
+              "constArgs": [],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ]
+        },
+        "resolvedPath": "crate::Names",
+        "generics": {
+          "text": "",
+          "whereClause": "",
+          "lifetimes": [],
+          "typeParams": [],
+          "constParams": []
+        }
+      },
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "names",
+          "type": {
+            "kind": "path",
+            "text": "Vec<String>",
+            "segments": [
+              {
+                "name": "Vec",
+                "args": [
+                  {
+                    "kind": "path",
+                    "text": "String",
+                    "segments": [
+                      {
+                        "name": "String",
+                        "args": [],
+                        "lifetimes": [],
+                        "constArgs": [],
+                        "bindings": [],
+                        "otherArgs": []
+                      }
+                    ],
+                    "unresolved": true
+                  }
+                ],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "path",
+        "text": "Names",
+        "segments": [
+          {
+            "name": "Names",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "resolved": "crate::Names"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn new(names: Vec<String>) -> Names"
+    },
+    {
+      "id": "fn:crate::Names::first",
+      "name": "first",
+      "canonicalPath": "crate::Names::first",
+      "publicPaths": [
+        "crate::Names::first"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "The first name, borrowed from the list (a borrowed return).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 81,
+      "owner": {
+        "typeText": "Names",
+        "type": {
+          "kind": "path",
+          "text": "Names",
+          "segments": [
+            {
+              "name": "Names",
+              "args": [],
+              "lifetimes": [],
+              "constArgs": [],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ]
+        },
+        "resolvedPath": "crate::Names",
+        "generics": {
+          "text": "",
+          "whereClause": "",
+          "lifetimes": [],
+          "typeParams": [],
+          "constParams": []
+        }
+      },
+      "selfKind": "ref",
+      "params": [],
+      "returnType": {
+        "kind": "reference",
+        "text": "&str",
+        "mutable": false,
+        "inner": {
+          "kind": "primitive",
+          "text": "str",
+          "name": "str"
+        }
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn first(&self) -> &str"
+    },
+    {
+      "id": "fn:crate::doubled_later",
+      "name": "doubled_later",
+      "canonicalPath": "crate::doubled_later",
+      "publicPaths": [
+        "crate::doubled_later"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "A future that resolves to the doubled value (an `async` function).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 87,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "primitive",
+            "text": "u32",
+            "name": "u32"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "u32",
+        "name": "u32"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": true,
+      "isConst": false,
+      "signature": "pub async fn doubled_later(x: u32) -> u32"
+    },
+    {
+      "id": "fn:crate::add",
+      "name": "add",
+      "canonicalPath": "crate::add",
+      "publicPaths": [
+        "crate::add"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Adds two integers (mappable).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 92,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "a",
+          "type": {
+            "kind": "primitive",
+            "text": "i32",
+            "name": "i32"
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "kind": "primitive",
+            "text": "i32",
+            "name": "i32"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "i32",
+        "name": "i32"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn add(a: i32, b: i32) -> i32"
+    },
+    {
+      "id": "fn:crate::scale",
+      "name": "scale",
+      "canonicalPath": "crate::scale",
+      "publicPaths": [
+        "crate::scale"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Scales `value` by `factor` (mappable).",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 97,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "value",
+          "type": {
+            "kind": "primitive",
+            "text": "f64",
+            "name": "f64"
+          }
+        },
+        {
+          "name": "factor",
+          "type": {
+            "kind": "primitive",
+            "text": "f64",
+            "name": "f64"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "f64",
+        "name": "f64"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn scale(value: f64, factor: f64) -> f64"
+    }
+  ],
+  "structs": [
+    {
+      "id": "struct:crate::Names",
+      "name": "Names",
+      "canonicalPath": "crate::Names",
+      "publicPaths": [
+        "crate::Names"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "A list of names with shared ownership inside.",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 68,
+      "shape": "named",
+      "fields": [
+        {
+          "name": "shared",
+          "index": 0,
+          "type": {
+            "kind": "path",
+            "text": "Rc<Vec<String>>",
+            "segments": [
+              {
+                "name": "Rc",
+                "args": [
+                  {
+                    "kind": "path",
+                    "text": "Vec<String>",
+                    "segments": [
+                      {
+                        "name": "Vec",
+                        "args": [
+                          {
+                            "kind": "path",
+                            "text": "String",
+                            "segments": [
+                              {
+                                "name": "String",
+                                "args": [],
+                                "lifetimes": [],
+                                "constArgs": [],
+                                "bindings": [],
+                                "otherArgs": []
+                              }
+                            ],
+                            "unresolved": true
+                          }
+                        ],
+                        "lifetimes": [],
+                        "constArgs": [],
+                        "bindings": [],
+                        "otherArgs": []
+                      }
+                    ],
+                    "unresolved": true
+                  }
+                ],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "external": true
+          },
+          "visibility": "private",
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        },
+        {
+          "name": "tag",
+          "index": 1,
+          "type": {
+            "kind": "path",
+            "text": "Arc<String>",
+            "segments": [
+              {
+                "name": "Arc",
+                "args": [
+                  {
+                    "kind": "path",
+                    "text": "String",
+                    "segments": [
+                      {
+                        "name": "String",
+                        "args": [],
+                        "lifetimes": [],
+                        "constArgs": [],
+                        "bindings": [],
+                        "otherArgs": []
+                      }
+                    ],
+                    "unresolved": true
+                  }
+                ],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "external": true
+          },
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "A thread-safe tag shared between copies.",
+          "attributes": []
+        }
+      ],
+      "tupleArity": 0,
+      "derives": [
+        "Clone",
+        "Debug",
+        "Default"
+      ],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": [
+        "Clone",
+        "Debug",
+        "Default"
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "id": "enum:crate::Shape",
+      "name": "Shape",
+      "canonicalPath": "crate::Shape",
+      "publicPaths": [
+        "crate::Shape"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "A shape: a data-carrying enum.",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 38,
+      "variants": [
+        {
+          "name": "Circle",
+          "shape": "tuple",
+          "fields": [
+            {
+              "index": 0,
+              "type": {
+                "kind": "primitive",
+                "text": "f64",
+                "name": "f64"
+              },
+              "visibility": "private",
+              "cfg": [],
+              "docs": "",
+              "attributes": []
+            }
+          ],
+          "cfg": [],
+          "docs": "A circle with the given radius.",
+          "attributes": []
+        },
+        {
+          "name": "Rect",
+          "shape": "named",
+          "fields": [
+            {
+              "name": "w",
+              "index": 0,
+              "type": {
+                "kind": "primitive",
+                "text": "f64",
+                "name": "f64"
+              },
+              "visibility": "private",
+              "cfg": [],
+              "docs": "The width.",
+              "attributes": []
+            },
+            {
+              "name": "h",
+              "index": 1,
+              "type": {
+                "kind": "primitive",
+                "text": "f64",
+                "name": "f64"
+              },
+              "visibility": "private",
+              "cfg": [],
+              "docs": "The height.",
+              "attributes": []
+            }
+          ],
+          "cfg": [],
+          "docs": "A rectangle with width and height.",
+          "attributes": []
+        }
+      ],
+      "isCLike": false,
+      "derives": [
+        "Clone",
+        "Debug",
+        "PartialEq"
+      ],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": [
+        "Clone",
+        "Debug",
+        "PartialEq"
+      ]
+    }
+  ],
+  "typeAliases": [],
+  "constants": [],
+  "traits": [],
+  "traitImpls": [],
+  "reexports": [],
+  "diagnostics": []
+}

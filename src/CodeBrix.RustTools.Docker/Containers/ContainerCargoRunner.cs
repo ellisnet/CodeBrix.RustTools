@@ -66,9 +66,15 @@ internal static class ContainerCargoRunner
     /// (<see cref="Engine.DockerEngineInfo.NativeLinuxTriple"/>), which decides whether a Linux
     /// target is native; <c>null</c> when unknown (then no Linux target is native and
     /// <see cref="CrossTarget.LinuxNative"/> cannot be used).</param>
+    /// <param name="androidApiLevel">The API level the Android targets are linked for
+    /// (<see cref="BuildContainer.AndroidApiLevel"/>).</param>
+    /// <remarks>The package's own variables for the target come first; an entry of
+    /// <see cref="CargoBuildOptions.Environment"/> with the same name replaces one, except the
+    /// target's <c>CARGO_TARGET_&lt;TRIPLE&gt;_RUSTFLAGS</c>, whose flags are APPENDED to the
+    /// package's (<see cref="MergeEnvironment"/>).</remarks>
     /// <exception cref="CrossTargetNotSupportedException"><see cref="CrossTarget.LinuxNative"/>
     /// with an unknown engine architecture.</exception>
-    public static ContainerCargoInvocation CreateInvocation(CargoCommand command, CargoBuildOptions options, CrossTarget target, string workingDirectory, string nativeLinuxTriple)
+    public static ContainerCargoInvocation CreateInvocation(CargoCommand command, CargoBuildOptions options, CrossTarget target, string workingDirectory, string nativeLinuxTriple, int androidApiLevel = AndroidApiLevel)
     {
         var engine = new DockerEngineInfo { Architecture = ArchitectureOf(nativeLinuxTriple) };
         target = CrossTargetInfo.Resolve(target, engine);
@@ -100,7 +106,7 @@ internal static class ContainerCargoRunner
         };
         if (info.IsAndroid)
         {
-            environment.AddRange(AndroidEnvironment(info));
+            environment.AddRange(AndroidEnvironment(info, androidApiLevel));
         }
 
         if (info.IsMacOS)
@@ -118,14 +124,7 @@ internal static class ContainerCargoRunner
             environment.AddRange(WindowsEnvironment(info));
         }
 
-        foreach (var pair in effective.Environment)
-        {
-            if (!string.IsNullOrWhiteSpace(pair.Key) && pair.Value != null)
-            {
-                environment.Add(pair.Key + "=" + pair.Value);
-            }
-        }
-
+        environment = MergeEnvironment(environment, effective.Environment, info.Triple).ToList();
         environment.Add(marker);
         var commandLine = new List<string> { "setsid", "-w", "cargo" };
         commandLine.AddRange(arguments);
@@ -142,6 +141,60 @@ internal static class ContainerCargoRunner
     }
 
     /// <summary>
+    /// Adds the caller's variables to the package's own <c>NAME=value</c> entries: a caller
+    /// entry replaces the package's entry of the same name, except
+    /// <c>CARGO_TARGET_&lt;TRIPLE&gt;_RUSTFLAGS</c> of <paramref name="triple"/>, whose value is
+    /// appended (after a space) to the package's flags for that target. Entries with a blank
+    /// name or a <c>null</c> value are ignored. The order of first appearance is kept.
+    /// </summary>
+    /// <param name="packageEntries">The package's entries, <c>NAME=value</c>.</param>
+    /// <param name="callerEnvironment">The caller's variables; may be <c>null</c>.</param>
+    /// <param name="triple">The target's triple, or <c>null</c>.</param>
+    public static IReadOnlyList<string> MergeEnvironment(IEnumerable<string> packageEntries, IEnumerable<KeyValuePair<string, string>> callerEnvironment, string triple)
+    {
+        var names = new List<string>();
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        void Set(string name, string value)
+        {
+            if (!values.ContainsKey(name))
+            {
+                names.Add(name);
+            }
+
+            values[name] = value;
+        }
+
+        foreach (var entry in packageEntries ?? Enumerable.Empty<string>())
+        {
+            var equals = entry.IndexOf('=');
+            if (equals > 0)
+            {
+                Set(entry.Substring(0, equals), entry.Substring(equals + 1));
+            }
+        }
+
+        var rustFlagsName = string.IsNullOrWhiteSpace(triple) ? null : "CARGO_TARGET_" + triple.Trim().ToUpperInvariant().Replace('-', '_').Replace('.', '_') + "_RUSTFLAGS";
+        foreach (var pair in callerEnvironment ?? Enumerable.Empty<KeyValuePair<string, string>>())
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null)
+            {
+                continue;
+            }
+
+            if (pair.Key == rustFlagsName && values.TryGetValue(pair.Key, out var own) && !string.IsNullOrWhiteSpace(own))
+            {
+                Set(pair.Key, string.IsNullOrWhiteSpace(pair.Value) ? own : own + " " + pair.Value.Trim());
+            }
+            else
+            {
+                Set(pair.Key, pair.Value);
+            }
+        }
+
+        return names.Select(n => n + "=" + values[n]).ToList();
+    }
+
+    /// <summary>
     /// The variables that point cargo and the <c>cc</c> crate at the NDK's clang wrappers for
     /// <see cref="AndroidApiLevel"/>: the C and C++ compilers, the archiver and ranlib for build
     /// scripts, and cargo's linker and archiver for the target. These are what
@@ -149,7 +202,16 @@ internal static class ContainerCargoRunner
     /// cargo's JSON messages through.
     /// </summary>
     public static IReadOnlyList<string> AndroidEnvironment(CrossTargetInfo info)
-        => ContainerAndroidLinkProfile.EnvironmentFor(info.Triple).Select(pair => pair.Key + "=" + pair.Value).ToList();
+        => AndroidEnvironment(info, AndroidApiLevel);
+
+    /// <summary>
+    /// The variables of <see cref="AndroidEnvironment(CrossTargetInfo)"/> for another API level.
+    /// </summary>
+    /// <param name="info">An Android target.</param>
+    /// <param name="apiLevel">The API level (21 or later).</param>
+    public static IReadOnlyList<string> AndroidEnvironment(CrossTargetInfo info, int apiLevel)
+        => (apiLevel == AndroidApiLevel ? ContainerAndroidLinkProfile : new AndroidLinkProfile(AndroidNdkToolsDirectory, apiLevel))
+            .EnvironmentFor(info.Triple).Select(pair => pair.Key + "=" + pair.Value).ToList();
 
     /// <summary>
     /// The link profile of the Windows targets inside the image: llvm-mingw at

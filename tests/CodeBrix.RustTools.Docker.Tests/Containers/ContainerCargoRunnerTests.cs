@@ -261,4 +261,75 @@ public class ContainerCargoRunnerTests
         command[2].Should().Contain("kill -KILL");
         command.Last().Should().Be("CODEBRIX_RUSTTOOLS_RUN=abc");
     }
+
+    [Fact]
+    public void CreateInvocation_links_android_for_the_given_api_level()
+    {
+        //Act
+        var invocation = ContainerCargoRunner.CreateInvocation(CargoCommand.Build, null, CrossTarget.AndroidArm64, "/work", "x86_64-unknown-linux-gnu", 33);
+
+        //Assert
+        const string Bin = "/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin";
+        invocation.Environment.Should().Contain($"CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER={Bin}/aarch64-linux-android33-clang");
+        invocation.Environment.Should().Contain($"CC_aarch64_linux_android={Bin}/aarch64-linux-android33-clang");
+        invocation.Environment.Should().NotContain(e => e.Contains("android24", StringComparison.Ordinal));
+        ContainerCargoRunner.AndroidEnvironment(CrossTargetInfo.Get(CrossTarget.AndroidX64), 30)
+            .Should().Contain($"CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER={Bin}/x86_64-linux-android30-clang");
+    }
+
+    [Fact]
+    public void CreateInvocation_extends_the_windows_rustflags_instead_of_replacing_them()
+    {
+        //Arrange
+        var options = new CargoBuildOptions();
+        options.Environment["CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_RUSTFLAGS"] = "-L native=/work/.codebrix-wgpu/win-x64";
+        options.Environment["CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_AR"] = "/custom/llvm-ar";
+
+        //Act
+        var invocation = ContainerCargoRunner.CreateInvocation(CargoCommand.Build, options, CrossTarget.WindowsX64Gnullvm, "/work", "x86_64-unknown-linux-gnu");
+
+        //Assert
+        invocation.Environment.Where(e => e.StartsWith("CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_RUSTFLAGS=", StringComparison.Ordinal))
+            .Should().Equal("CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_RUSTFLAGS=-C target-feature=+crt-static -L native=/work/.codebrix-wgpu/win-x64");
+        invocation.Environment.Where(e => e.StartsWith("CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_AR=", StringComparison.Ordinal))
+            .Should().Equal("CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_AR=/custom/llvm-ar");
+        invocation.Environment.Last().Should().Be(invocation.MarkerEntry);
+    }
+
+    [Fact]
+    public void CreateInvocation_extends_the_macos_rustflags_with_the_options_flags()
+    {
+        //Arrange
+        var options = new CargoBuildOptions { MacOSInstallName = "@rpath/libx.dylib" };
+        options.Environment["CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS"] = "-C link-arg=-Wl,-dead_strip";
+
+        //Act
+        var invocation = ContainerCargoRunner.CreateInvocation(CargoCommand.Build, options, CrossTarget.MacOSArm64, "/work", "x86_64-unknown-linux-gnu");
+        var flags = invocation.Environment.Single(e => e.StartsWith("CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS=", StringComparison.Ordinal));
+
+        //Assert
+        flags.Should().EndWith(" -C link-arg=-Wl,-dead_strip");
+        flags.Should().Contain("@rpath/libx.dylib");
+    }
+
+    [Fact]
+    public void MergeEnvironment_replaces_by_name_appends_only_the_targets_rustflags_and_skips_nulls()
+    {
+        //Arrange
+        var own = new[] { "A=1", "CARGO_TARGET_X_Y_RUSTFLAGS=-C one", "CARGO_TARGET_OTHER_RUSTFLAGS=-C keep" };
+        var caller = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["A"] = "2",
+            ["CARGO_TARGET_X_Y_RUSTFLAGS"] = "-C two",
+            ["CARGO_TARGET_OTHER_RUSTFLAGS"] = "-C replaced",
+            ["NEW"] = "3",
+            ["NONE"] = null,
+        };
+
+        //Act
+        var merged = ContainerCargoRunner.MergeEnvironment(own, caller, "x-y");
+
+        //Assert
+        merged.Should().Equal("A=2", "CARGO_TARGET_X_Y_RUSTFLAGS=-C one -C two", "CARGO_TARGET_OTHER_RUSTFLAGS=-C replaced", "NEW=3");
+    }
 }

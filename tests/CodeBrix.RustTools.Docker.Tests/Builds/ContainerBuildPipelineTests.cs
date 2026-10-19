@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using CodeBrix.RustTools.Building;
@@ -125,5 +126,46 @@ public class ContainerBuildPipelineTests
         metadataOptions.FilterPlatform.Should().Be(expected);
         metadataOptions.Offline.Should().BeTrue();
         metadataOptions.AllFeatures.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CopyRootFor_uses_the_copy_root_only_when_it_contains_the_workspace_root()
+    {
+        //Arrange
+        var root = System.IO.Path.GetFullPath("/stage");
+        var inside = new ContainerBuildRequest { ProjectDirectory = "/stage/src/crate", CopyRootDirectory = "/stage/" };
+        var outside = new ContainerBuildRequest { ProjectDirectory = "/elsewhere", CopyRootDirectory = "/stage" };
+        var act = () => ContainerBuildPipeline.CopyRootFor(outside, System.IO.Path.GetFullPath("/elsewhere"));
+
+        //Act + Assert
+        ContainerBuildPipeline.CopyRootFor(inside, System.IO.Path.GetFullPath("/stage/src/crate")).Should().Be(root);
+        ContainerBuildPipeline.CopyRootFor(inside, root).Should().Be(root);
+        ContainerBuildPipeline.CopyRootFor(new ContainerBuildRequest { ProjectDirectory = "/w" }, "/w").Should().Be("/w");
+        act.Should().Throw<ArgumentException>().WithMessage("*does not contain*");
+        ContainerBuildPipeline.ContainerDirectoryFor(root, System.IO.Path.GetFullPath("/stage/src/crate")).Should().Be("/work/src/crate");
+    }
+
+    [Fact]
+    public void OptionsForTarget_adds_only_that_targets_environment()
+    {
+        //Arrange
+        var options = new CargoBuildOptions();
+        options.Environment["SHARED"] = "1";
+        var request = new ContainerBuildRequest { ProjectDirectory = "/a", Targets = { CrossTarget.WindowsX64Gnullvm, CrossTarget.MacOSUniversal } };
+        request.TargetEnvironment[CrossTarget.LinuxNative] = new System.Collections.Generic.Dictionary<string, string> { ["NATIVE"] = "n", ["SHARED"] = "2" };
+        request.TargetEnvironment[CrossTarget.MacOSUniversal] = new System.Collections.Generic.Dictionary<string, string> { ["MAC"] = "m" };
+
+        //Act
+        var linux = ContainerBuildPipeline.OptionsForTarget(request, options, CrossTarget.LinuxX64, X64Engine);
+        var mac = ContainerBuildPipeline.OptionsForTarget(request, options, CrossTarget.MacOSX64, X64Engine);
+        var windows = ContainerBuildPipeline.OptionsForTarget(request, options, CrossTarget.WindowsX64Gnullvm, X64Engine);
+
+        //Assert
+        linux.Environment["NATIVE"].Should().Be("n");
+        linux.Environment["SHARED"].Should().Be("2");
+        mac.Environment["MAC"].Should().Be("m");
+        mac.Environment.ContainsKey("NATIVE").Should().BeFalse();
+        windows.Should().BeSameAs(options);
+        options.Environment["SHARED"].Should().Be("1");
     }
 }

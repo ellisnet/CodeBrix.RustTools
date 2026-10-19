@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CodeBrix.Docker;
+using CodeBrix.RustTools.Building;
 
 namespace CodeBrix.RustTools.Docker.Containers;
 
@@ -70,6 +71,15 @@ public sealed class BuildContainerOptions
     public bool NetworkDisabled { get; set; }
 
     /// <summary>
+    /// The Android API level the container's <see cref="BuildContainer.AndroidApiLevel"/> starts
+    /// at: the level cargo links the Android targets for. Default 24
+    /// (<c>AndroidLinkProfile.DefaultApiLevel</c>); a library that links a native package built
+    /// for a later Android (for example 33) needs that level. Not part of the reuse key (the
+    /// level is applied per cargo run, not to the container).
+    /// </summary>
+    public int AndroidApiLevel { get; set; } = AndroidLinkProfile.DefaultApiLevel;
+
+    /// <summary>
     /// Returns a copy of these options (collections are copied; mount and limit objects are
     /// shared).
     /// </summary>
@@ -85,5 +95,6 @@ public sealed class BuildContainerOptions
         Mounts = Mounts == null ? new List<MountSpec>() : Mounts.ToList(),
         TargetVolumeName = TargetVolumeName,
         NetworkDisabled = NetworkDisabled,
+        AndroidApiLevel = AndroidApiLevel,
     };
 }

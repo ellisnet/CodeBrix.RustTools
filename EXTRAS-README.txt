@@ -5,9 +5,10 @@ package
 ================================================================================
 
 This repository ships no sample .NET applications, demos or command-line
-tools. Two projects are packable - src/CodeBrix.RustTools and
-src/CodeBrix.RustTools.Docker - and everything else listed below exists only
-to test, document or plan them. None of it is included in either package.
+tools. Three projects are packable - src/CodeBrix.RustTools,
+src/CodeBrix.RustTools.Docker and src/CodeBrix.RustTools.CrateBuilder - and
+everything else listed below exists only to test, document or plan them.
+None of it is included in any package.
 
 For runnable, compilable usage of the libraries, read the test projects: the
 "WORKING EXAMPLES ON GITHUB" section of each AGENT-README maps each feature
@@ -18,10 +19,12 @@ TEST PROJECTS
 =============
     tests/CodeBrix.RustTools.Tests/
     tests/CodeBrix.RustTools.Docker.Tests/
+    tests/CodeBrix.RustTools.CrateBuilder.Tests/
 
 The only non-package projects in the solution. xUnit v3; run them as
 described in MAINTAINER-README.txt (TESTING); the Docker suite needs a
-running Docker engine. The first project's Fixtures/ folder holds captured
+running Docker engine, and the CrateBuilder suite's live tests skip when
+cargo or a Docker engine is absent. The first project's Fixtures/ folder holds captured
 cargo, rustc and libtest output and trimmed copies of the Rust release
 manifests and crates.io API responses used by the parser and stubbed-HTTP
 tests (see THIRD-PARTY-NOTICES.txt).
@@ -29,9 +32,9 @@ tests (see THIRD-PARTY-NOTICES.txt).
 
 RUST SAMPLES
 ============
-    rust-samples/test_project_01 ... test_project_13
+    rust-samples/test_project_01 ... test_project_13, test_project_15 ... test_project_18
 
-Thirteen small, self-contained Rust projects (each with its own README.md,
+Seventeen small, self-contained Rust projects (each with its own README.md,
 Cargo.toml and Cargo.lock) that give the library real inputs: every target
 kind, a workspace, build scripts, features, license-gate fixtures and
 deliberate warnings. They are not part of the .NET solution and are not
@@ -66,12 +69,44 @@ packaged.
       MIT. Builds libtest_project_13.so on Linux and Android and
       test_project_13.dll (+ .exe) on Windows: the input of the Docker
       suite's retrieval-layout and cross-compilation tests
+  15  plain Rust library (rlib) "datacrate", no dependencies, no C exports:
+      Copy structs (Vec2, Tick, Rect), a handle type with methods
+      (Encoder), strings, slices, Option / Result, a C-like enum (Mode),
+      fixed arrays, doc comments (one with a unit), a pub(crate) and a
+      private function, a re-exported nested module and a wasm32-only
+      function: the CrateBuilder input for API extraction, mapping, facade
+      and wrapper generation
+  16  native module: [lib] crate-type = ["cdylib"], crate wgpu_link_probe,
+      links dynamically to the CodeBrix WebGPU engine (codebrix_wgpu) by the
+      CodeBrix.WebGpu.Native route-1 recipe (include! of codebrix_wgpu_procs.rs
+      from CODEBRIX_WGPU_INCLUDE_DIR, build.rs enables codebrix_wgpu_direct);
+      exports probe_api_version and probe_built_api_version; pure Rust, no
+      dependencies, MIT. Input of the CrateBuilder WebGPU link tests
+  17  plain Rust library (rlib) "hardcrate" whose API is mostly NOT mappable
+      to a C facade automatically (generics, impl Trait, closures, trait
+      objects, iterators, a data-carrying enum, Vec of it, Rc / Arc, a
+      borrowed return, async) plus two mappable functions; declares the
+      features default and extra
+  18  Cargo workspace for CrateBuilder staging: members = ["crates/*"]
+      (alpha rlib, beta), exclude = ["external"] (gamma, a standalone path
+      dependency of alpha), [workspace.package] / [workspace.dependencies]
+      inheritance; no external crates, builds offline
 
 Which ones the tests use: 02, 04, 05, 06 and 10 are built (05 most of all);
 07 is read with `cargo metadata` only; the others are read-only parsing
 inputs at most. The Docker suite builds 02, 04, 05, 06, 10 and 13 inside
 containers, 13 also for Windows (GNU) and Android. 03, 08, 09 and 11 are
 never built by the tests (slow C, TLS, async-runtime or image builds).
+The CrateBuilder suite builds 13 (host: every Linux and Android target this
+machine can build; Docker: linux-x64, win-x64, both Android ABIs and
+ManyLinux), 15, 16 (host, and in Docker for linux-x64, win-x64 and
+android-arm64), 17 and 18 (alpha, offline, also with gamma moved outside the
+workspace so it is vendored) in sandbox copies, end to end through wrappers
+and console apps; several tests also write small neutral crates of their
+own into their sandboxes (see MAINTAINER-README.txt, CRATEBUILDER);
+it reads 15, 17 and 02 with the API extractor (the extractor itself is built
+in a scratch folder, never in rust-samples/), and the Git end-to-end test
+clones this repository from GitHub and builds its copy of 13.
 
 The sandbox rule: tests never run cargo inside rust-samples/. They copy a
 sample to a sandbox under the test output folder first, so no target/ or

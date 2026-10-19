@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using CodeBrix.RustTools.Docker.Artifacts;
 using CodeBrix.RustTools.Docker.Builds;
+using CodeBrix.RustTools.Docker.Containers;
 using CodeBrix.RustTools.Docker.Images;
 using SilverAssertions;
 using Xunit;
@@ -128,5 +129,72 @@ public class ContainerBuildRequestTests
         copy.ProjectDirectory.Should().Be("/a");
         request.Targets.Should().Equal(CrossTarget.LinuxNative);
         request.ExtraExcludePatterns.Should().Equal("*.log");
+    }
+
+    [Fact]
+    public void defaults_link_android_at_api_24_with_no_copy_root_and_no_target_environment()
+    {
+        //Act
+        var request = new ContainerBuildRequest();
+
+        //Assert
+        request.AndroidApiLevel.Should().Be(24);
+        request.CopyRootDirectory.Should().BeNull();
+        request.TargetEnvironment.Should().BeEmpty();
+        new BuildContainerOptions().AndroidApiLevel.Should().Be(24);
+        new BuildContainerOptions { AndroidApiLevel = 33 }.Clone().AndroidApiLevel.Should().Be(33);
+    }
+
+    [Fact]
+    public void Validate_rejects_an_android_api_level_below_21()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest { ProjectDirectory = "/a", AndroidApiLevel = 19 };
+        var act = () => request.Validate();
+
+        //Act + Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*AndroidApiLevel*");
+    }
+
+    [Fact]
+    public void Validate_allows_a_copy_root_only_with_a_project_directory()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest { ArchivePath = "/a.zip", CopyRootDirectory = "/stage" };
+        var act = () => request.Validate();
+
+        //Act + Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*CopyRootDirectory*");
+    }
+
+    [Fact]
+    public void Validate_requires_target_environment_keys_to_be_requested_targets()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest { ProjectDirectory = "/a", Targets = { CrossTarget.WindowsX64Gnullvm } };
+        request.TargetEnvironment[CrossTarget.WindowsX64Gnullvm] = new System.Collections.Generic.Dictionary<string, string> { ["X"] = "1" };
+        request.Validate();
+        request.TargetEnvironment[CrossTarget.AndroidArm64] = new System.Collections.Generic.Dictionary<string, string> { ["X"] = "1" };
+        var act = () => request.Validate();
+
+        //Act + Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*AndroidArm64*");
+    }
+
+    [Fact]
+    public void Clone_copies_the_new_options_and_their_dictionaries()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest { ProjectDirectory = "/a", CopyRootDirectory = "/stage", AndroidApiLevel = 33 };
+        request.TargetEnvironment[CrossTarget.LinuxNative] = new System.Collections.Generic.Dictionary<string, string> { ["X"] = "1" };
+
+        //Act
+        var copy = request.Clone();
+        copy.TargetEnvironment[CrossTarget.LinuxNative]["X"] = "2";
+
+        //Assert
+        copy.CopyRootDirectory.Should().Be("/stage");
+        copy.AndroidApiLevel.Should().Be(33);
+        request.TargetEnvironment[CrossTarget.LinuxNative]["X"].Should().Be("1");
     }
 }

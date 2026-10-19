@@ -33,7 +33,7 @@ internal sealed class ProcessRunResult
     public bool TimedOut { get; init; }
 
     /// <summary>
-    /// True when the process was killed because the cancellation token fired.
+    /// True when the process was killed because the cancellation token was cancelled.
     /// </summary>
     public bool WasCancelled { get; init; }
 

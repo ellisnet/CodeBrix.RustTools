@@ -1,0 +1,9 @@
+[package]
+name = "datacrate"
+version = "0.1.0"
+edition = "2024"
+description = "Plain Rust library (rlib) of data-shaped types and functions for C facade generation"
+license = "MIT"
+publish = false
+
+[dependencies]

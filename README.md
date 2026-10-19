@@ -45,6 +45,10 @@ This repository also produces `CodeBrix.RustTools.Docker.MitLicenseForever`, for
 
 See its [README](https://github.com/ellisnet/CodeBrix.RustTools/blob/main/src/CodeBrix.RustTools.Docker/README.md) and [AGENT-README.txt](https://github.com/ellisnet/CodeBrix.RustTools/blob/main/src/CodeBrix.RustTools.Docker/AGENT-README.txt) in `src/CodeBrix.RustTools.Docker`.
 
+## The CodeBrix.RustTools.CrateBuilder package
+
+This repository also produces `CodeBrix.RustTools.CrateBuilder.MitLicenseForever`, which turns a Rust crate - a local `Cargo.toml`, or a Git repository cloned with CodeBrix.LibGit2 - into native binaries for the runtime identifiers you choose, built with the installed toolchain (CodeBrix.RustTools) or in a Docker container (CodeBrix.RustTools.Docker), with a JSON build record beside them and, optionally, a .NET 10 wrapper class library around the result. It checks first which of the requested targets the machine can build and returns install guidance for the rest. See its [README](https://github.com/ellisnet/CodeBrix.RustTools/blob/main/src/CodeBrix.RustTools.CrateBuilder/README.md) and [AGENT-README.txt](https://github.com/ellisnet/CodeBrix.RustTools/blob/main/src/CodeBrix.RustTools.CrateBuilder/AGENT-README.txt) in `src/CodeBrix.RustTools.CrateBuilder`.
+
 ## Sample Code
 
 ### Check the machine, audit the licenses, then build

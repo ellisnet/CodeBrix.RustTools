@@ -52,6 +52,16 @@ public sealed class ToolchainRequirements
     /// <see cref="ReadinessIssueKind.LinuxCrossToolMissing"/> issue. Empty by default.</summary>
     public IDictionary<string, LinuxLinkProfile> RequiredLinuxCrossTools { get; } = new Dictionary<string, LinuxLinkProfile>(StringComparer.Ordinal);
 
+    /// <summary>The Windows gnullvm targets whose llvm-mingw must be present, keyed by target
+    /// triple (<see cref="WindowsGnullvmLinkProfile.Triples"/>); the value is llvm-mingw's folder
+    /// (or its <c>bin</c> folder) to use, or <c>null</c> to search <c>LLVM_MINGW_HOME</c> and
+    /// PATH (<see cref="LlvmMingwLocator"/>). For each entry the target's clang wrapper
+    /// (<see cref="WindowsGnullvmLinkProfile.ClangPath"/>) must be found; a missing one is a
+    /// blocking <see cref="ReadinessIssueKind.LlvmMingwMissing"/> issue. The target's standard
+    /// library is a separate requirement (<see cref="RequiredTargets"/>;
+    /// <see cref="ForWindowsGnullvm"/> adds both). Empty by default.</summary>
+    public IDictionary<string, string> RequiredWindowsGnullvm { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>
     /// Requirements for building the two 64-bit Android targets: the default tools, the
     /// <c>aarch64-linux-android</c> and <c>x86_64-linux-android</c> standard libraries, and an
@@ -89,6 +99,36 @@ public sealed class ToolchainRequirements
             }
 
             requirements.RequiredLinuxCrossTools[normalized] = profile;
+        }
+
+        return requirements;
+    }
+
+    /// <summary>
+    /// Requirements for building Windows targets with llvm-mingw
+    /// (<see cref="WindowsGnullvmLinkProfile"/>): the default tools, each target's standard
+    /// library and llvm-mingw's clang wrapper for each target.
+    /// </summary>
+    /// <param name="triples">Windows gnullvm target triples
+    /// (<see cref="WindowsGnullvmLinkProfile.Triples"/>).</param>
+    /// <param name="llvmMingwDirectory">llvm-mingw's folder (or its <c>bin</c> folder), or
+    /// <c>null</c> (the default) to search <c>LLVM_MINGW_HOME</c> and PATH.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="triples"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">A triple is not a Windows gnullvm target triple.</exception>
+    public static ToolchainRequirements ForWindowsGnullvm(IEnumerable<string> triples, string llvmMingwDirectory = null)
+    {
+        ArgumentNullException.ThrowIfNull(triples);
+        var requirements = new ToolchainRequirements();
+        foreach (var triple in triples)
+        {
+            var normalized = (triple ?? string.Empty).Trim().ToLowerInvariant();
+            WindowsGnullvmLinkProfile.MachineOf(normalized);
+            if (!requirements.RequiredTargets.Contains(normalized))
+            {
+                requirements.RequiredTargets.Add(normalized);
+            }
+
+            requirements.RequiredWindowsGnullvm[normalized] = string.IsNullOrWhiteSpace(llvmMingwDirectory) ? null : llvmMingwDirectory.Trim();
         }
 
         return requirements;

@@ -100,6 +100,12 @@ public static class InstallGuidanceProvider
             result.Add(GetGuidance(InstallGuidanceTopic.InstallLinuxCrossTools, os, crossTargets));
         }
 
+        var windowsTargets = readiness.MissingLlvmMingwTargets;
+        if (windowsTargets.Count > 0)
+        {
+            result.Add(GetGuidance(InstallGuidanceTopic.InstallLlvmMingw, os, windowsTargets));
+        }
+
         return result
             .GroupBy(g => g.Topic)
             .Select(g => g.First())
@@ -125,7 +131,8 @@ public static class InstallGuidanceProvider
     /// <see cref="InstallGuidanceTopic.AddTargets"/>,
     /// <see cref="InstallGuidanceTopic.InstallToolchain"/> and
     /// <see cref="InstallGuidanceTopic.InstallLinuxCrossTools"/> (Linux target triples; others
-    /// are ignored); defaults apply when empty).</param>
+    /// are ignored) and <see cref="InstallGuidanceTopic.InstallLlvmMingw"/> (Windows gnullvm
+    /// target triples; others are ignored); defaults apply when empty).</param>
     /// <param name="rustupManaged">For <see cref="InstallGuidanceTopic.InstallComponents"/>:
     /// false gives the operating-system package commands where they exist.</param>
     public static InstallGuidance GetGuidance(InstallGuidanceTopic topic, OperatingSystemKind operatingSystem, IEnumerable<string> items = null, bool rustupManaged = true)
@@ -142,6 +149,7 @@ public static class InstallGuidanceProvider
             InstallGuidanceTopic.InstallToolchain => InstallToolchain(operatingSystem, list.Count == 0 ? new List<string> { "stable" } : list),
             InstallGuidanceTopic.InstallAndroidNdk => InstallAndroidNdk(operatingSystem),
             InstallGuidanceTopic.InstallLinuxCrossTools => InstallLinuxCrossTools(operatingSystem, list),
+            InstallGuidanceTopic.InstallLlvmMingw => InstallLlvmMingw(operatingSystem, list),
             _ => throw new ArgumentOutOfRangeException(nameof(topic), topic, "Unknown guidance topic."),
         };
     }
@@ -396,6 +404,33 @@ public static class InstallGuidanceProvider
                 Commands = new[] { rustup, "# On a Debian or Ubuntu machine:", apt },
                 DocumentationUrl = RustupTargetsUrl,
             },
+        };
+    }
+
+    private static InstallGuidance InstallLlvmMingw(OperatingSystemKind os, IReadOnlyList<string> items)
+    {
+        var triples = items.Where(WindowsGnullvmLinkProfile.IsWindowsGnullvmTriple).Select(t => t.Trim().ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToList();
+        if (triples.Count == 0)
+        {
+            triples = WindowsGnullvmLinkProfile.Triples.ToList();
+        }
+
+        var rustup = "rustup target add " + string.Join(" ", triples);
+        var (archive, export) = os switch
+        {
+            OperatingSystemKind.Windows => ("llvm-mingw-<version>-ucrt-x86_64.zip (or -aarch64.zip on an ARM64 machine)", "setx " + LlvmMingwLocator.HomeVariable + " \"C:\\llvm-mingw-<version>-ucrt-x86_64\""),
+            OperatingSystemKind.MacOS => ("llvm-mingw-<version>-ucrt-macos-universal.tar.xz", "export " + LlvmMingwLocator.HomeVariable + "=\"$HOME/llvm-mingw-<version>-ucrt-macos-universal\""),
+            _ => ("llvm-mingw-<version>-ucrt-ubuntu-<release>-x86_64.tar.xz (or -aarch64 on an ARM64 machine)", "export " + LlvmMingwLocator.HomeVariable + "=\"$HOME/llvm-mingw-<version>-ucrt-ubuntu-<release>-x86_64\""),
+        };
+        return new InstallGuidance
+        {
+            Topic = InstallGuidanceTopic.InstallLlvmMingw,
+            OperatingSystem = os,
+            Title = "Install llvm-mingw for the Windows targets",
+            Explanation = "Building the Windows gnullvm targets needs their standard libraries (rustup) and llvm-mingw: its clang wrappers (" + string.Join(", ", triples.Select(t => WindowsGnullvmLinkProfile.MachineOf(t) + "-w64-mingw32-clang")) + ") link the library against the Universal C Runtime, with no Microsoft SDK involved. Download the release archive " + archive + " from " + LlvmMingwLocator.ReleasesUrl + ", unpack it, and name its folder with " + LlvmMingwLocator.HomeVariable + " (or put its bin folder on PATH). CodeBrix.RustTools.Docker builds these targets without installing anything on this machine.",
+            Commands = new[] { rustup, "# Download and unpack " + archive + " from " + LlvmMingwLocator.ReleasesUrl, export },
+            DocumentationUrl = LlvmMingwLocator.ReleasesUrl,
+            RequiresNewShell = true,
         };
     }
 

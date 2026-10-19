@@ -29,4 +29,10 @@ public enum ReadinessIssueKind
     /// <c>LinuxLinkProfile</c>) is not on PATH or in the profile's folder. The issue's
     /// <see cref="ReadinessIssue.Subject"/> is the target triple.</summary>
     LinuxCrossToolMissing,
+
+    /// <summary>The llvm-mingw clang wrapper a Windows gnullvm target links with
+    /// (<see cref="ToolchainRequirements.RequiredWindowsGnullvm"/>) was not found in the named
+    /// folder, under <c>LLVM_MINGW_HOME</c> or on PATH. The issue's
+    /// <see cref="ReadinessIssue.Subject"/> is the target triple.</summary>
+    LlvmMingwMissing,
 }

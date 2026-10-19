@@ -179,6 +179,8 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <returns>The running container. Dispose it (or call
     /// <see cref="BuildContainer.StopAndRemoveAsync"/>) when done.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="image"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="BuildContainerOptions.AndroidApiLevel"/>
+    /// is below 21.</exception>
     /// <exception cref="DockerUnavailableException">The engine cannot be used.</exception>
     /// <exception cref="ContainerBuildException">The container could not be created or
     /// started.</exception>
@@ -191,14 +193,21 @@ public sealed class DockerRustWorkbench : IDisposable
         }
 
         var resolved = (options ?? new BuildContainerOptions()).Clone();
+        if (resolved.AndroidApiLevel < 21)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), resolved.AndroidApiLevel, "BuildContainerOptions.AndroidApiLevel must be 21 or later (64-bit Android targets start there).");
+        }
+
         BuildContainerFactory.MergeEnvironment(resolved.Env);
         await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
         var client = GetClient();
-        return await RunDockerAsync(
+        var container = await RunDockerAsync(
             $"Starting a build container from {image.Reference}",
             token => BuildContainerFactory.StartAsync(client, Options, _labels, image, resolved, token),
             Timeout.InfiniteTimeSpan,
             cancellationToken).ConfigureAwait(false);
+        container.AndroidApiLevel = resolved.AndroidApiLevel;
+        return container;
     }
 
     /// <summary>
@@ -298,7 +307,7 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <exception cref="SourceArchiveException">The archive could not be extracted or holds
     /// no Cargo project.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/>
-    /// fired.</exception>
+    /// was cancelled.</exception>
     public Task<ContainerBuildResult> BuildAsync(ContainerBuildRequest request, IProgress<ContainerBuildProgress> progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -374,13 +383,125 @@ public sealed class DockerRustWorkbench : IDisposable
     }
 
     /// <summary>
+    /// Copies the contents of a host folder into a sub-folder of the container's <c>/work</c>
+    /// (<c>/work/&lt;containerSubdirectory&gt;</c>), leaving the rest of <c>/work</c> as it is:
+    /// only that sub-folder is emptied first. Use it to put two inputs - for example a tool and
+    /// the project it reads - side by side in one container; <see cref="CopySourceAsync"/>
+    /// replaces all of <c>/work</c>. Exclusion patterns work as in
+    /// <see cref="CopySourceAsync"/>, relative to <paramref name="hostDirectory"/>. Run cargo for
+    /// the copied project with <see cref="CargoBuildOptions.WorkingDirectory"/> set to the same
+    /// sub-folder.
+    /// </summary>
+    /// <param name="container">A running container from <see cref="StartContainerAsync"/>.</param>
+    /// <param name="hostDirectory">The folder on the host.</param>
+    /// <param name="containerSubdirectory">The sub-folder below <c>/work</c>, relative
+    /// (<c>tools/extractor</c>, <c>./staged</c>) or absolute below <c>/work</c>
+    /// (<c>/work/staged</c>). It must not be <c>/work</c> itself, the target volume
+    /// (<c>/work/target</c>) or anything inside it, and must not contain <c>..</c>.</param>
+    /// <param name="extraExcludes">More patterns to skip; may be <c>null</c>.</param>
+    /// <param name="progress">Receives one report per file sent; may be <c>null</c>.</param>
+    /// <param name="cancellationToken">Cancels the copy.</param>
+    /// <returns>What was copied (its <see cref="SourceCopyResult"/> names the container
+    /// folder).</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="container"/> is
+    /// <c>null</c>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="hostDirectory"/> is blank, or
+    /// <paramref name="containerSubdirectory"/> is blank, not below <c>/work</c>, the target
+    /// volume, or contains <c>..</c>.</exception>
+    /// <exception cref="System.IO.DirectoryNotFoundException">The host folder does not
+    /// exist.</exception>
+    /// <exception cref="ContainerBuildException">The container has been removed, or the copy
+    /// failed.</exception>
+    /// <exception cref="DockerUnavailableException">The engine cannot be used.</exception>
+    public async Task<SourceCopyResult> CopySourceIntoAsync(BuildContainer container, string hostDirectory, string containerSubdirectory, IEnumerable<string> extraExcludes = null, IProgress<SourceCopyProgress> progress = null, CancellationToken cancellationToken = default)
+    {
+        ThrowIfUnusable(container);
+        if (string.IsNullOrWhiteSpace(hostDirectory))
+        {
+            throw new ArgumentException("A host folder is required.", nameof(hostDirectory));
+        }
+
+        var destination = ResolveCopySubdirectory(containerSubdirectory);
+        var source = System.IO.Path.GetFullPath(hostDirectory);
+        if (!System.IO.Directory.Exists(source))
+        {
+            throw new System.IO.DirectoryNotFoundException($"The folder '{source}' does not exist.");
+        }
+
+        var patterns = (Options.DefaultExcludePatterns ?? new List<string>())
+            .Concat(extraExcludes ?? Enumerable.Empty<string>())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var client = GetClient();
+        return await RunDockerAsync($"Copying '{source}' into {destination} of {container}", async token =>
+        {
+            var clear = await ContainerCommandRunner.RunAsync(client, container.Id, ClearSubdirectoryCommand(destination), "/", null, token).ConfigureAwait(false);
+            if (!clear.Succeeded)
+            {
+                throw new ContainerBuildException(
+                    $"The old contents of {destination} could not be removed in {container}.{Describe(clear.StandardError)}",
+                    clear.Command,
+                    clear.ExitCode,
+                    clear.StandardOutput,
+                    clear.StandardError);
+            }
+
+            return await new DockerCopyTransport(client, container.Id).CopyDirectoryInAsync(source, destination, patterns, progress, token).ConfigureAwait(false);
+        }, Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The container folder of <see cref="CopySourceIntoAsync"/>: a folder strictly below
+    /// <c>/work</c> that is not the target volume or inside it.
+    /// </summary>
+    /// <exception cref="ArgumentException">Blank, <c>/work</c> itself, outside <c>/work</c>,
+    /// the target volume, or containing <c>..</c>.</exception>
+    internal static string ResolveCopySubdirectory(string containerSubdirectory)
+    {
+        if (string.IsNullOrWhiteSpace(containerSubdirectory))
+        {
+            throw new ArgumentException("A container sub-folder is required; use CopySourceAsync to fill all of /work.", nameof(containerSubdirectory));
+        }
+
+        var resolved = ResolveContainerDirectory(containerSubdirectory);
+        var work = BuildContainer.WorkDirectory;
+        if (!resolved.StartsWith(work + "/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"The container sub-folder '{containerSubdirectory}' must lie below {work} (use CopySourceAsync for {work} itself).", nameof(containerSubdirectory));
+        }
+
+        if (resolved == BuildContainer.TargetPath || resolved.StartsWith(BuildContainer.TargetPath + "/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"The container sub-folder '{containerSubdirectory}' is the target volume ({BuildContainer.TargetPath}).", nameof(containerSubdirectory));
+        }
+
+        return resolved;
+    }
+
+    /// <summary>The shell command that empties (or creates) one folder below <c>/work</c>
+    /// before <see cref="CopySourceIntoAsync"/>, leaving mount points inside it in
+    /// place.</summary>
+    internal static IReadOnlyList<string> ClearSubdirectoryCommand(string folder) => new[]
+    {
+        "sh", "-c",
+        "d=\"$1\"; mkdir -p \"$d\" || exit 1; for f in \"$d\"/* \"$d\"/.[!.]* \"$d\"/..?*; do [ -e \"$f\" ] || [ -L \"$f\" ] || continue; "
+        + "mountpoint -q \"$f\" 2>/dev/null && continue; rm -rf \"$f\" || exit 1; done",
+        "codebrix-clear",
+        folder,
+    };
+
+    /// <summary>
     /// Runs a cargo subcommand inside a build container with <c>--message-format=json</c> and
     /// returns the same result type the sibling package's <c>CargoRunner</c> returns (typed
     /// diagnostics, artifacts, progress, test counts), with CONTAINER paths in artifacts and
     /// diagnostics. cargo runs with <c>CARGO_TARGET_DIR=/work/target</c> (the target volume),
     /// <c>CARGO_TERM_COLOR=never</c> and <c>RUSTUP_AUTO_INSTALL=0</c>, plus
     /// <see cref="CargoBuildOptions.Environment"/> (entries with a <c>null</c> value are
-    /// ignored). For a compiling command (build, check, test, doc, clippy) ONE
+    /// ignored). A <c>CARGO_TARGET_&lt;TRIPLE&gt;_RUSTFLAGS</c> entry there EXTENDS the rustflags
+    /// the package itself sets for that target (Windows: <c>+crt-static</c>; macOS: the link
+    /// profile's flags) - they come first, the entry's flags after - instead of replacing them;
+    /// any other variable the package sets is replaced by an entry of the same name. For a compiling command (build, check, test, doc, clippy) ONE
     /// <c>cargo metadata --filter-platform TRIPLE</c> (the triple of <paramref name="target"/>)
     /// runs first, inside the container, when <see cref="CargoBuildOptions.LicensePolicy"/> is
     /// set or <see cref="CargoBuildOptions.ExpectedCrateCount"/> is not: it serves the license
@@ -405,7 +526,8 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <see cref="CargoCommandResult.TimedOut"/> set.</param>
     /// <param name="target">The target to compile for. The cross targets need an image with
     /// their layer (see <see cref="BuildImageSpec.CrossTargets"/>); Android targets are linked
-    /// with the NDK's clang for API level 24.</param>
+    /// with the NDK's clang for the container's <see cref="BuildContainer.AndroidApiLevel"/>
+    /// (default 24).</param>
     /// <param name="progress">Receives cargo's progress; may be <c>null</c>.</param>
     /// <param name="cancellationToken">Kills cargo and every process it started inside the
     /// container.</param>
@@ -419,7 +541,7 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <exception cref="ContainerBuildException">The container has been removed, or cargo could
     /// not be started.</exception>
     /// <exception cref="DockerUnavailableException">The engine cannot be used.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="CargoBuildOptions.ThrowOnCancellation"/> is true.</exception>
     public async Task<CargoCommandResult> RunCargoAsync(BuildContainer container, CargoCommand command, CargoBuildOptions options = null, CrossTarget target = CrossTarget.LinuxNative, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
     {
@@ -711,7 +833,7 @@ public sealed class DockerRustWorkbench : IDisposable
     internal async Task<CargoCommandResult> RunCargoCoreAsync(BuildContainer container, CargoCommand command, CargoBuildOptions options, CrossTarget target, string containerDirectory, Action<CargoProgress> report, CancellationToken cancellationToken)
     {
         var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
-        var invocation = ContainerCargoRunner.CreateInvocation(command, options, target, containerDirectory, engine.NativeLinuxTriple);
+        var invocation = ContainerCargoRunner.CreateInvocation(command, options, target, containerDirectory, engine.NativeLinuxTriple, container.AndroidApiLevel);
         var client = GetClient();
         return await RunDockerAsync(
             $"Running '{invocation.DisplayCommandLine}' in {container}",
@@ -751,7 +873,8 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <summary>
     /// The container folder for <see cref="CargoBuildOptions.WorkingDirectory"/>:
     /// <c>/work</c> when unset, the path itself when absolute, otherwise below
-    /// <c>/work</c>.
+    /// <c>/work</c> (only <c>.</c> segments such as a leading <c>./</c> are dropped, so a hidden
+    /// folder such as <c>.codebrix-facade/x</c> keeps its dot).
     /// </summary>
     internal static string ResolveContainerDirectory(string workingDirectory)
     {
@@ -771,7 +894,9 @@ public sealed class DockerRustWorkbench : IDisposable
             return path.Length > 1 ? path.TrimEnd('/') : path;
         }
 
-        path = path.TrimStart('.', '/').TrimEnd('/');
+        // Only "./" segments are dropped: the leading dot of a hidden folder (".cache/x") stays.
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries).Where(segment => segment != ".").ToList();
+        path = string.Join("/", segments);
         return path.Length == 0 ? BuildContainer.WorkDirectory : BuildContainer.WorkDirectory + "/" + path;
     }
 

@@ -114,6 +114,36 @@ public sealed class ContainerBuildRequest
     /// </summary>
     public IList<string> ExtraExcludePatterns { get; set; } = new List<string>();
 
+    /// <summary>
+    /// A host folder to copy into <c>/work</c> instead of the project's Cargo workspace root:
+    /// for a build whose path dependencies or other inputs live beside the workspace (for
+    /// example a staging folder that holds the crate, vendored path crates and a generated
+    /// crate). It must contain the workspace root (or the project folder when it is
+    /// standalone); the project is built in its own folder below it
+    /// (<see cref="ContainerBuildSource.ContainerDirectory"/>). Only with
+    /// <see cref="ProjectDirectory"/>. <c>null</c> (the default) copies the workspace root.
+    /// </summary>
+    public string CopyRootDirectory { get; set; }
+
+    /// <summary>
+    /// The Android API level the Android targets are linked for (the container's
+    /// <see cref="BuildContainer.AndroidApiLevel"/>). Default 24
+    /// (<see cref="AndroidLinkProfile.DefaultApiLevel"/>); 21 or later.
+    /// </summary>
+    public int AndroidApiLevel { get; set; } = AndroidLinkProfile.DefaultApiLevel;
+
+    /// <summary>
+    /// Extra environment variables for ONE target's cargo run, keyed by a target of
+    /// <see cref="Targets"/> (<see cref="CrossTarget.MacOSUniversal"/> applies to both slices,
+    /// <see cref="CrossTarget.LinuxNative"/> to the engine's own Linux target). They are added to
+    /// <see cref="CargoBuildOptions.Environment"/> for that target, replacing an entry of the
+    /// same name. As with every cargo run in the container, a
+    /// <c>CARGO_TARGET_&lt;TRIPLE&gt;_RUSTFLAGS</c> variable EXTENDS the rustflags the package
+    /// sets for that target (Windows <c>+crt-static</c>, the macOS link profile's flags) instead
+    /// of replacing them. Empty by default.
+    /// </summary>
+    public IDictionary<CrossTarget, IDictionary<string, string>> TargetEnvironment { get; set; } = new Dictionary<CrossTarget, IDictionary<string, string>>();
+
     /// <summary>Returns a shallow copy with its own lists (the option objects are
     /// shared).</summary>
     public ContainerBuildRequest Clone() => new ContainerBuildRequest
@@ -132,6 +162,11 @@ public sealed class ContainerBuildRequest
         ContinueOnTargetFailure = ContinueOnTargetFailure,
         Timeout = Timeout,
         ExtraExcludePatterns = ExtraExcludePatterns == null ? new List<string>() : ExtraExcludePatterns.ToList(),
+        CopyRootDirectory = CopyRootDirectory,
+        AndroidApiLevel = AndroidApiLevel,
+        TargetEnvironment = TargetEnvironment == null
+            ? new Dictionary<CrossTarget, IDictionary<string, string>>()
+            : TargetEnvironment.ToDictionary(p => p.Key, p => (IDictionary<string, string>)(p.Value == null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(p.Value, StringComparer.Ordinal))),
     };
 
     /// <summary>
@@ -168,6 +203,24 @@ public sealed class ContainerBuildRequest
         if (Targets.Distinct().Count() != Targets.Count)
         {
             throw new ArgumentException("Targets must not name a target twice.", "request");
+        }
+
+        if (AndroidApiLevel < 21)
+        {
+            throw new ArgumentException("AndroidApiLevel must be 21 or later (64-bit Android targets start there).", "request");
+        }
+
+        if (!string.IsNullOrWhiteSpace(CopyRootDirectory) && string.IsNullOrWhiteSpace(ProjectDirectory))
+        {
+            throw new ArgumentException("CopyRootDirectory can only be used with ProjectDirectory.", "request");
+        }
+
+        foreach (var key in (TargetEnvironment ?? new Dictionary<CrossTarget, IDictionary<string, string>>()).Keys)
+        {
+            if (!Targets.Contains(key))
+            {
+                throw new ArgumentException($"TargetEnvironment names {key}, which is not one of the requested Targets.", "request");
+            }
         }
 
         if (Retrieval != null)

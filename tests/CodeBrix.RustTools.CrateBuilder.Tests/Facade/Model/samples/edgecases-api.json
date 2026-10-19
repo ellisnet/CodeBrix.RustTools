@@ -1,0 +1,1846 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "codebrix-api-extractor",
+    "version": "1.0.0"
+  },
+  "crate": {
+    "name": "alpha-lib",
+    "version": "workspace",
+    "edition": "workspace",
+    "libName": "alpha",
+    "crateTypes": [
+      "cdylib",
+      "rlib"
+    ],
+    "rootKind": "lib",
+    "rootFile": "src/lib.rs",
+    "manifestPath": "edge_workspace/crates/alpha/Cargo.toml",
+    "packageDirectory": "edge_workspace/crates/alpha",
+    "declaredFeatures": [],
+    "requestedFeatures": [],
+    "docs": ""
+  },
+  "modules": [
+    {
+      "path": "crate",
+      "name": "crate",
+      "visibility": "pub",
+      "file": "src/lib.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate"
+      ]
+    },
+    {
+      "path": "crate::deep",
+      "name": "deep",
+      "visibility": "pub",
+      "file": "src/deep.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "Deep docs.",
+      "publicPaths": [
+        "crate::d",
+        "crate::deep"
+      ]
+    },
+    {
+      "path": "crate::deep::deeper",
+      "name": "deeper",
+      "visibility": "pub",
+      "file": "src/deep/deeper.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::d::deeper",
+        "crate::deep::deeper"
+      ]
+    },
+    {
+      "path": "crate::hidden",
+      "name": "hidden",
+      "visibility": "private",
+      "file": "src/hidden.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": []
+    },
+    {
+      "path": "crate::renamed",
+      "name": "renamed",
+      "visibility": "pub",
+      "file": "src/other/weird.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::renamed"
+      ]
+    },
+    {
+      "path": "crate::renamed::sub",
+      "name": "sub",
+      "visibility": "private",
+      "file": "src/other/sub.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": []
+    },
+    {
+      "path": "crate::inline",
+      "name": "inline",
+      "visibility": "pub",
+      "file": "src/lib.rs",
+      "isInline": true,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::inline"
+      ]
+    },
+    {
+      "path": "crate::inline::nested",
+      "name": "nested",
+      "visibility": "pub",
+      "file": "src/lib.rs",
+      "isInline": true,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::inline::nested"
+      ]
+    },
+    {
+      "path": "crate::broken",
+      "name": "broken",
+      "visibility": "pub",
+      "file": "src/broken.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::broken"
+      ]
+    },
+    {
+      "path": "crate::missing",
+      "name": "missing",
+      "visibility": "pub",
+      "file": "src/lib.rs",
+      "isInline": false,
+      "cfg": [],
+      "docs": "",
+      "publicPaths": [
+        "crate::missing"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "id": "fn:crate::deep::deeper::in_deeper",
+      "name": "in_deeper",
+      "canonicalPath": "crate::deep::deeper::in_deeper",
+      "publicPaths": [
+        "crate::d::deeper::in_deeper",
+        "crate::deep::deeper::in_deeper"
+      ],
+      "module": "crate::deep::deeper",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/deep/deeper.rs",
+      "line": 1,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "path",
+        "text": "super::super::Dog",
+        "segments": [
+          {
+            "name": "super",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          },
+          {
+            "name": "super",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          },
+          {
+            "name": "Dog",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "resolved": "crate::Dog"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn in_deeper() -> super::super::Dog"
+    },
+    {
+      "id": "fn:crate::deep::in_deep",
+      "name": "in_deep",
+      "canonicalPath": "crate::deep::in_deep",
+      "publicPaths": [
+        "crate::d::in_deep",
+        "crate::deep::in_deep"
+      ],
+      "module": "crate::deep",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/deep.rs",
+      "line": 3,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn in_deep()"
+    },
+    {
+      "id": "fn:crate::hidden::from_glob",
+      "name": "from_glob",
+      "canonicalPath": "crate::hidden::from_glob",
+      "publicPaths": [
+        "crate::from_glob"
+      ],
+      "module": "crate::hidden",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/hidden.rs",
+      "line": 1,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn from_glob()"
+    },
+    {
+      "id": "fn:crate::renamed::weird",
+      "name": "weird",
+      "canonicalPath": "crate::renamed::weird",
+      "publicPaths": [
+        "crate::renamed::weird"
+      ],
+      "module": "crate::renamed",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/other/weird.rs",
+      "line": 1,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn weird()"
+    },
+    {
+      "id": "fn:crate::renamed::sub::sub_fn",
+      "name": "sub_fn",
+      "canonicalPath": "crate::renamed::sub::sub_fn",
+      "publicPaths": [],
+      "module": "crate::renamed::sub",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/other/sub.rs",
+      "line": 1,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn sub_fn()"
+    },
+    {
+      "id": "fn:crate::inline::nested::innermost",
+      "name": "innermost",
+      "canonicalPath": "crate::inline::nested::innermost",
+      "publicPaths": [
+        "crate::inline::alias_fn",
+        "crate::inline::nested::innermost"
+      ],
+      "module": "crate::inline::nested",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 5,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn innermost()"
+    },
+    {
+      "id": "fn:crate::c_export",
+      "name": "c_export",
+      "canonicalPath": "crate::c_export",
+      "publicPaths": [
+        "crate::c_export"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [
+        "#[unsafe(no_mangle)]"
+      ],
+      "file": "src/lib.rs",
+      "line": 14,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "a",
+          "type": {
+            "kind": "primitive",
+            "text": "i32",
+            "name": "i32"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "primitive",
+        "text": "i32",
+        "name": "i32"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "abi": "C",
+      "signature": "pub extern \"C\" fn c_export(a: i32) -> i32"
+    },
+    {
+      "id": "fn:crate::ptrs",
+      "name": "ptrs",
+      "canonicalPath": "crate::ptrs",
+      "publicPaths": [
+        "crate::ptrs"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 23,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "p",
+          "type": {
+            "kind": "ptr",
+            "text": "*const u8",
+            "mutable": false,
+            "inner": {
+              "kind": "primitive",
+              "text": "u8",
+              "name": "u8"
+            }
+          }
+        },
+        {
+          "name": "q",
+          "type": {
+            "kind": "ptr",
+            "text": "*mut u8",
+            "mutable": true,
+            "inner": {
+              "kind": "primitive",
+              "text": "u8",
+              "name": "u8"
+            }
+          }
+        },
+        {
+          "name": "f",
+          "type": {
+            "kind": "fn_ptr",
+            "text": "extern \"C\" fn(i32) -> i32",
+            "inputs": [
+              {
+                "kind": "primitive",
+                "text": "i32",
+                "name": "i32"
+              }
+            ],
+            "output": {
+              "kind": "primitive",
+              "text": "i32",
+              "name": "i32"
+            },
+            "isUnsafe": false,
+            "abi": "C"
+          }
+        },
+        {
+          "name": "n",
+          "type": {
+            "kind": "never",
+            "text": "!"
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn ptrs(p: *const u8, q: *mut u8, f: extern \"C\" fn(i32) -> i32, n: !)"
+    },
+    {
+      "id": "fn:crate::tuple_pat",
+      "name": "tuple_pat",
+      "canonicalPath": "crate::tuple_pat",
+      "publicPaths": [
+        "crate::tuple_pat"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 25,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "arg0",
+          "pattern": "(a, b)",
+          "type": {
+            "kind": "tuple",
+            "text": "(i32, i32)",
+            "elems": [
+              {
+                "kind": "primitive",
+                "text": "i32",
+                "name": "i32"
+              },
+              {
+                "kind": "primitive",
+                "text": "i32",
+                "name": "i32"
+              }
+            ]
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "array",
+        "text": "[u8; 4]",
+        "elem": {
+          "kind": "primitive",
+          "text": "u8",
+          "name": "u8"
+        },
+        "len": "4",
+        "lenValue": 4
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn tuple_pat((a, b): (i32, i32)) -> [u8; 4]"
+    },
+    {
+      "id": "fn:crate::G::get",
+      "name": "get",
+      "canonicalPath": "crate::G::get",
+      "publicPaths": [
+        "crate::G::get"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 27,
+      "owner": {
+        "typeText": "G<'a, T, N>",
+        "type": {
+          "kind": "path",
+          "text": "G<'a, T, N>",
+          "segments": [
+            {
+              "name": "G",
+              "args": [
+                {
+                  "kind": "path",
+                  "text": "T",
+                  "segments": [
+                    {
+                      "name": "T",
+                      "args": [],
+                      "lifetimes": [],
+                      "constArgs": [],
+                      "bindings": [],
+                      "otherArgs": []
+                    }
+                  ]
+                },
+                {
+                  "kind": "path",
+                  "text": "N",
+                  "segments": [
+                    {
+                      "name": "N",
+                      "args": [],
+                      "lifetimes": [],
+                      "constArgs": [],
+                      "bindings": [],
+                      "otherArgs": []
+                    }
+                  ]
+                }
+              ],
+              "lifetimes": [
+                "'a"
+              ],
+              "constArgs": [],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ]
+        },
+        "resolvedPath": "crate::G",
+        "generics": {
+          "text": "<'a, T: Clone + Send, const N: usize>",
+          "whereClause": "",
+          "lifetimes": [
+            "'a"
+          ],
+          "typeParams": [
+            {
+              "name": "T",
+              "bounds": [
+                "Clone",
+                "Send"
+              ]
+            }
+          ],
+          "constParams": [
+            {
+              "name": "N",
+              "type": {
+                "kind": "primitive",
+                "text": "usize",
+                "name": "usize"
+              }
+            }
+          ]
+        }
+      },
+      "selfKind": "ref",
+      "params": [],
+      "returnType": {
+        "kind": "reference",
+        "text": "&T",
+        "mutable": false,
+        "inner": {
+          "kind": "path",
+          "text": "T",
+          "segments": [
+            {
+              "name": "T",
+              "args": [],
+              "lifetimes": [],
+              "constArgs": [],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ],
+          "unresolved": true
+        }
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": true,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": true,
+      "signature": "pub const fn get(&self) -> &T"
+    },
+    {
+      "id": "fn:crate::G::raw",
+      "name": "raw",
+      "canonicalPath": "crate::G::raw",
+      "publicPaths": [
+        "crate::G::raw"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 27,
+      "owner": {
+        "typeText": "G<'a, T, N>",
+        "type": {
+          "kind": "path",
+          "text": "G<'a, T, N>",
+          "segments": [
+            {
+              "name": "G",
+              "args": [
+                {
+                  "kind": "path",
+                  "text": "T",
+                  "segments": [
+                    {
+                      "name": "T",
+                      "args": [],
+                      "lifetimes": [],
+                      "constArgs": [],
+                      "bindings": [],
+                      "otherArgs": []
+                    }
+                  ]
+                },
+                {
+                  "kind": "path",
+                  "text": "N",
+                  "segments": [
+                    {
+                      "name": "N",
+                      "args": [],
+                      "lifetimes": [],
+                      "constArgs": [],
+                      "bindings": [],
+                      "otherArgs": []
+                    }
+                  ]
+                }
+              ],
+              "lifetimes": [
+                "'a"
+              ],
+              "constArgs": [],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ]
+        },
+        "resolvedPath": "crate::G",
+        "generics": {
+          "text": "<'a, T: Clone + Send, const N: usize>",
+          "whereClause": "",
+          "lifetimes": [
+            "'a"
+          ],
+          "typeParams": [
+            {
+              "name": "T",
+              "bounds": [
+                "Clone",
+                "Send"
+              ]
+            }
+          ],
+          "constParams": [
+            {
+              "name": "N",
+              "type": {
+                "kind": "primitive",
+                "text": "usize",
+                "name": "usize"
+              }
+            }
+          ]
+        }
+      },
+      "selfKind": "typed",
+      "selfType": {
+        "kind": "path",
+        "text": "Box<Self>",
+        "segments": [
+          {
+            "name": "Box",
+            "args": [
+              {
+                "kind": "path",
+                "text": "Self",
+                "segments": [
+                  {
+                    "name": "Self",
+                    "args": [],
+                    "lifetimes": [],
+                    "constArgs": [],
+                    "bindings": [],
+                    "otherArgs": []
+                  }
+                ]
+              }
+            ],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ],
+        "unresolved": true
+      },
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": true,
+      "isUnsafe": true,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub unsafe fn raw(self: Box<Self>)"
+    },
+    {
+      "id": "fn:crate::odd_types",
+      "name": "odd_types",
+      "canonicalPath": "crate::odd_types",
+      "publicPaths": [
+        "crate::odd_types"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "Qualified paths, Fn segments, one-element tuples, bindings and const args.",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 29,
+      "selfKind": "none",
+      "params": [
+        {
+          "name": "a",
+          "type": {
+            "kind": "path",
+            "text": "<Dog as Speak>::Out",
+            "qself": {
+              "kind": "path",
+              "text": "Dog",
+              "segments": [
+                {
+                  "name": "Dog",
+                  "args": [],
+                  "lifetimes": [],
+                  "constArgs": [],
+                  "bindings": [],
+                  "otherArgs": []
+                }
+              ],
+              "resolved": "crate::Dog"
+            },
+            "segments": [
+              {
+                "name": "Speak",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              },
+              {
+                "name": "Out",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "kind": "path",
+            "text": "Box<dyn Fn(u8, u16) -> bool + Send>",
+            "segments": [
+              {
+                "name": "Box",
+                "args": [
+                  {
+                    "kind": "dyn_trait",
+                    "text": "dyn Fn(u8, u16) -> bool + Send",
+                    "bounds": [
+                      "Fn(u8, u16) -> bool",
+                      "Send"
+                    ]
+                  }
+                ],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        },
+        {
+          "name": "c",
+          "type": {
+            "kind": "tuple",
+            "text": "(u8,)",
+            "elems": [
+              {
+                "kind": "primitive",
+                "text": "u8",
+                "name": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "d",
+          "type": {
+            "kind": "path",
+            "text": "G<'static, u8, { 2 + 1 }>",
+            "segments": [
+              {
+                "name": "G",
+                "args": [
+                  {
+                    "kind": "primitive",
+                    "text": "u8",
+                    "name": "u8"
+                  }
+                ],
+                "lifetimes": [
+                  "'static"
+                ],
+                "constArgs": [
+                  "{ 2 + 1 }"
+                ],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "resolved": "crate::G"
+          }
+        },
+        {
+          "name": "e",
+          "type": {
+            "kind": "reference",
+            "text": "&'static mut [Option<&'static str>]",
+            "mutable": true,
+            "lifetime": "'static",
+            "inner": {
+              "kind": "slice",
+              "text": "[Option<&'static str>]",
+              "elem": {
+                "kind": "path",
+                "text": "Option<&'static str>",
+                "segments": [
+                  {
+                    "name": "Option",
+                    "args": [
+                      {
+                        "kind": "reference",
+                        "text": "&'static str",
+                        "mutable": false,
+                        "lifetime": "'static",
+                        "inner": {
+                          "kind": "primitive",
+                          "text": "str",
+                          "name": "str"
+                        }
+                      }
+                    ],
+                    "lifetimes": [],
+                    "constArgs": [],
+                    "bindings": [],
+                    "otherArgs": []
+                  }
+                ],
+                "unresolved": true
+              }
+            }
+          }
+        }
+      ],
+      "returnType": {
+        "kind": "impl_trait",
+        "text": "impl Iterator<Item = (u8, u8)>",
+        "bounds": [
+          "Iterator<Item = (u8, u8)>"
+        ]
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn odd_types(a: <Dog as Speak>::Out, b: Box<dyn Fn(u8, u16) -> bool + Send>, c: (u8,), d: G<'static, u8, { 2 + 1 }>, e: &'static mut [Option<&'static str>]) -> impl Iterator<Item = (u8, u8)>"
+    },
+    {
+      "id": "fn:crate::hidden_one",
+      "name": "hidden_one",
+      "canonicalPath": "crate::hidden_one",
+      "publicPaths": [
+        "crate::hidden_one"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": true,
+      "attributes": [
+        "#[doc(hidden)]",
+        "#[deprecated(since = \"1.0\", note = \"use something else\")]"
+      ],
+      "file": "src/lib.rs",
+      "line": 32,
+      "selfKind": "none",
+      "params": [],
+      "returnType": {
+        "kind": "unit",
+        "text": "()"
+      },
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "isUnsafe": false,
+      "isAsync": false,
+      "isConst": false,
+      "signature": "pub fn hidden_one()"
+    }
+  ],
+  "structs": [
+    {
+      "id": "struct:crate::hidden::GlobStruct",
+      "name": "GlobStruct",
+      "canonicalPath": "crate::hidden::GlobStruct",
+      "publicPaths": [
+        "crate::GlobStruct"
+      ],
+      "module": "crate::hidden",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/hidden.rs",
+      "line": 2,
+      "shape": "unit",
+      "fields": [],
+      "tupleArity": 0,
+      "derives": [],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": []
+    },
+    {
+      "id": "struct:crate::Dog",
+      "name": "Dog",
+      "canonicalPath": "crate::Dog",
+      "publicPaths": [
+        "crate::Dog"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 16,
+      "shape": "unit",
+      "fields": [],
+      "tupleArity": 0,
+      "derives": [],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": [
+        "Default",
+        "Send",
+        "Speak"
+      ]
+    },
+    {
+      "id": "union:crate::U",
+      "name": "U",
+      "canonicalPath": "crate::U",
+      "publicPaths": [
+        "crate::U"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 24,
+      "shape": "union",
+      "fields": [
+        {
+          "name": "a",
+          "index": 0,
+          "type": {
+            "kind": "primitive",
+            "text": "u32",
+            "name": "u32"
+          },
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        },
+        {
+          "name": "b",
+          "index": 1,
+          "type": {
+            "kind": "primitive",
+            "text": "f32",
+            "name": "f32"
+          },
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        }
+      ],
+      "tupleArity": 0,
+      "derives": [],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": []
+    },
+    {
+      "id": "struct:crate::G",
+      "name": "G",
+      "canonicalPath": "crate::G",
+      "publicPaths": [
+        "crate::G"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 26,
+      "shape": "named",
+      "fields": [
+        {
+          "name": "r",
+          "index": 0,
+          "type": {
+            "kind": "reference",
+            "text": "&'a T",
+            "mutable": false,
+            "lifetime": "'a",
+            "inner": {
+              "kind": "path",
+              "text": "T",
+              "segments": [
+                {
+                  "name": "T",
+                  "args": [],
+                  "lifetimes": [],
+                  "constArgs": [],
+                  "bindings": [],
+                  "otherArgs": []
+                }
+              ],
+              "unresolved": true
+            }
+          },
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        }
+      ],
+      "tupleArity": 0,
+      "derives": [],
+      "repr": [],
+      "generics": {
+        "text": "<'a, T: Clone = u8, const N: usize = 3>",
+        "whereClause": "where T: Send",
+        "lifetimes": [
+          "'a"
+        ],
+        "typeParams": [
+          {
+            "name": "T",
+            "bounds": [
+              "Clone"
+            ],
+            "default": "u8"
+          }
+        ],
+        "constParams": [
+          {
+            "name": "N",
+            "type": {
+              "kind": "primitive",
+              "text": "usize",
+              "name": "usize"
+            },
+            "default": "3"
+          }
+        ]
+      },
+      "hasGenerics": true,
+      "implementedTraits": []
+    }
+  ],
+  "enums": [
+    {
+      "id": "enum:crate::Signed",
+      "name": "Signed",
+      "canonicalPath": "crate::Signed",
+      "publicPaths": [
+        "crate::Signed"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 33,
+      "variants": [
+        {
+          "name": "Neg",
+          "shape": "unit",
+          "fields": [],
+          "discriminant": "-1",
+          "discriminantValue": -1,
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        },
+        {
+          "name": "Hex",
+          "shape": "unit",
+          "fields": [],
+          "discriminant": "0x10",
+          "discriminantValue": 16,
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        },
+        {
+          "name": "Expr",
+          "shape": "unit",
+          "fields": [],
+          "discriminant": "1 << 2",
+          "cfg": [],
+          "docs": "",
+          "attributes": []
+        }
+      ],
+      "isCLike": true,
+      "derives": [],
+      "repr": [],
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "implementedTraits": []
+    }
+  ],
+  "typeAliases": [
+    {
+      "id": "type:crate::Pair",
+      "name": "Pair",
+      "canonicalPath": "crate::Pair",
+      "publicPaths": [
+        "crate::Pair"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 19,
+      "generics": {
+        "text": "<T>",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [
+          {
+            "name": "T",
+            "bounds": []
+          }
+        ],
+        "constParams": []
+      },
+      "hasGenerics": true,
+      "type": {
+        "kind": "tuple",
+        "text": "(T, T)",
+        "elems": [
+          {
+            "kind": "path",
+            "text": "T",
+            "segments": [
+              {
+                "name": "T",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          },
+          {
+            "kind": "path",
+            "text": "T",
+            "segments": [
+              {
+                "name": "T",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ],
+            "unresolved": true
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "id": "static:crate::COUNTER",
+      "name": "COUNTER",
+      "canonicalPath": "crate::COUNTER",
+      "publicPaths": [
+        "crate::COUNTER"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 20,
+      "kind": "static",
+      "isMutable": true,
+      "type": {
+        "kind": "primitive",
+        "text": "u32",
+        "name": "u32"
+      },
+      "value": "0"
+    },
+    {
+      "id": "const:crate::NEG",
+      "name": "NEG",
+      "canonicalPath": "crate::NEG",
+      "publicPaths": [
+        "crate::NEG"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 21,
+      "kind": "const",
+      "isMutable": false,
+      "type": {
+        "kind": "primitive",
+        "text": "i32",
+        "name": "i32"
+      },
+      "value": "-5"
+    },
+    {
+      "id": "const:crate::COMPUTED",
+      "name": "COMPUTED",
+      "canonicalPath": "crate::COMPUTED",
+      "publicPaths": [
+        "crate::COMPUTED"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 22,
+      "kind": "const",
+      "isMutable": false,
+      "type": {
+        "kind": "primitive",
+        "text": "u32",
+        "name": "u32"
+      }
+    },
+    {
+      "id": "const:crate::G::ANSWER",
+      "name": "ANSWER",
+      "canonicalPath": "crate::G::ANSWER",
+      "publicPaths": [
+        "crate::G::ANSWER"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 34,
+      "kind": "const",
+      "isMutable": false,
+      "type": {
+        "kind": "primitive",
+        "text": "u32",
+        "name": "u32"
+      },
+      "value": "42",
+      "owner": {
+        "typeText": "G<'_, u8, 3>",
+        "type": {
+          "kind": "path",
+          "text": "G<'_, u8, 3>",
+          "segments": [
+            {
+              "name": "G",
+              "args": [
+                {
+                  "kind": "primitive",
+                  "text": "u8",
+                  "name": "u8"
+                }
+              ],
+              "lifetimes": [
+                "'_"
+              ],
+              "constArgs": [
+                "3"
+              ],
+              "bindings": [],
+              "otherArgs": []
+            }
+          ]
+        },
+        "resolvedPath": "crate::G",
+        "generics": {
+          "text": "",
+          "whereClause": "",
+          "lifetimes": [],
+          "typeParams": [],
+          "constParams": []
+        }
+      }
+    }
+  ],
+  "traits": [
+    {
+      "id": "trait:crate::Speak",
+      "name": "Speak",
+      "canonicalPath": "crate::Speak",
+      "publicPaths": [
+        "crate::Speak"
+      ],
+      "module": "crate",
+      "visibility": "pub",
+      "cfg": [],
+      "docs": "",
+      "isDocHidden": false,
+      "attributes": [],
+      "file": "src/lib.rs",
+      "line": 15,
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "hasGenerics": false,
+      "supertraits": [],
+      "isUnsafe": false,
+      "isAuto": false,
+      "methods": [
+        {
+          "id": "fn:crate::Speak::speak",
+          "name": "speak",
+          "canonicalPath": "crate::Speak::speak",
+          "publicPaths": [
+            "crate::Speak::speak"
+          ],
+          "module": "crate",
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "",
+          "isDocHidden": false,
+          "attributes": [],
+          "file": "src/lib.rs",
+          "line": 15,
+          "selfKind": "ref",
+          "params": [],
+          "returnType": {
+            "kind": "path",
+            "text": "String",
+            "segments": [
+              {
+                "name": "String",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ]
+          },
+          "generics": {
+            "text": "",
+            "whereClause": "",
+            "lifetimes": [],
+            "typeParams": [],
+            "constParams": []
+          },
+          "hasGenerics": false,
+          "isUnsafe": false,
+          "isAsync": false,
+          "isConst": false,
+          "signature": "fn speak(&self) -> String",
+          "hasDefault": false
+        },
+        {
+          "id": "fn:crate::Speak::loud",
+          "name": "loud",
+          "canonicalPath": "crate::Speak::loud",
+          "publicPaths": [
+            "crate::Speak::loud"
+          ],
+          "module": "crate",
+          "visibility": "pub",
+          "cfg": [],
+          "docs": "",
+          "isDocHidden": false,
+          "attributes": [],
+          "file": "src/lib.rs",
+          "line": 15,
+          "selfKind": "ref",
+          "params": [],
+          "returnType": {
+            "kind": "path",
+            "text": "String",
+            "segments": [
+              {
+                "name": "String",
+                "args": [],
+                "lifetimes": [],
+                "constArgs": [],
+                "bindings": [],
+                "otherArgs": []
+              }
+            ]
+          },
+          "generics": {
+            "text": "",
+            "whereClause": "",
+            "lifetimes": [],
+            "typeParams": [],
+            "constParams": []
+          },
+          "hasGenerics": false,
+          "isUnsafe": false,
+          "isAsync": false,
+          "isConst": false,
+          "signature": "fn loud(&self) -> String",
+          "hasDefault": true
+        }
+      ],
+      "associatedTypes": [
+        "Out"
+      ],
+      "associatedConsts": [
+        "N"
+      ]
+    }
+  ],
+  "traitImpls": [
+    {
+      "module": "crate",
+      "file": "src/lib.rs",
+      "line": 17,
+      "cfg": [],
+      "traitPath": "Speak",
+      "traitName": "Speak",
+      "selfType": {
+        "kind": "path",
+        "text": "Dog",
+        "segments": [
+          {
+            "name": "Dog",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ]
+      },
+      "selfPath": "crate::Dog",
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "isUnsafe": false,
+      "isNegative": false,
+      "methods": [
+        "speak"
+      ],
+      "associatedTypes": [
+        "Out"
+      ]
+    },
+    {
+      "module": "crate",
+      "file": "src/lib.rs",
+      "line": 18,
+      "cfg": [],
+      "traitPath": "Default",
+      "traitName": "Default",
+      "selfType": {
+        "kind": "path",
+        "text": "Dog",
+        "segments": [
+          {
+            "name": "Dog",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ]
+      },
+      "selfPath": "crate::Dog",
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "isUnsafe": false,
+      "isNegative": false,
+      "methods": [
+        "default"
+      ],
+      "associatedTypes": []
+    },
+    {
+      "module": "crate",
+      "file": "src/lib.rs",
+      "line": 35,
+      "cfg": [],
+      "traitPath": "Send",
+      "traitName": "Send",
+      "selfType": {
+        "kind": "path",
+        "text": "Dog",
+        "segments": [
+          {
+            "name": "Dog",
+            "args": [],
+            "lifetimes": [],
+            "constArgs": [],
+            "bindings": [],
+            "otherArgs": []
+          }
+        ]
+      },
+      "selfPath": "crate::Dog",
+      "generics": {
+        "text": "",
+        "whereClause": "",
+        "lifetimes": [],
+        "typeParams": [],
+        "constParams": []
+      },
+      "isUnsafe": true,
+      "isNegative": false,
+      "methods": [],
+      "associatedTypes": []
+    }
+  ],
+  "reexports": [
+    {
+      "module": "crate",
+      "visibility": "pub",
+      "path": "hidden",
+      "name": "*",
+      "isGlob": true,
+      "targets": [
+        "crate::hidden"
+      ],
+      "isExternal": false,
+      "cfg": [],
+      "file": "src/lib.rs",
+      "line": 6
+    },
+    {
+      "module": "crate",
+      "visibility": "pub",
+      "path": "deep",
+      "name": "d",
+      "isGlob": false,
+      "targets": [
+        "crate::deep"
+      ],
+      "isExternal": false,
+      "cfg": [],
+      "file": "src/lib.rs",
+      "line": 7
+    },
+    {
+      "module": "crate",
+      "visibility": "pub",
+      "path": "std::collections::HashMap",
+      "name": "HashMap",
+      "isGlob": false,
+      "targets": [
+        "std::collections::HashMap"
+      ],
+      "isExternal": true,
+      "cfg": [],
+      "file": "src/lib.rs",
+      "line": 8
+    },
+    {
+      "module": "crate::inline",
+      "visibility": "pub",
+      "path": "self::nested::innermost",
+      "name": "alias_fn",
+      "isGlob": false,
+      "targets": [
+        "crate::inline::nested::innermost"
+      ],
+      "isExternal": false,
+      "cfg": [],
+      "file": "src/lib.rs",
+      "line": 5
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "parse_error",
+      "message": "src/broken.rs could not be parsed: cannot parse string into token stream",
+      "file": "src/broken.rs",
+      "line": 1,
+      "column": 13
+    },
+    {
+      "severity": "warning",
+      "code": "module_file_not_found",
+      "message": "the file of module crate::missing was not found (looked for src/missing.rs, src/missing/mod.rs)",
+      "file": "src/lib.rs",
+      "line": 10
+    },
+    {
+      "severity": "info",
+      "code": "item_macro_not_expanded",
+      "message": "crate: the item macro `bitflags::bitflags!` is not expanded; any items it generates are not part of this document",
+      "file": "src/lib.rs",
+      "line": 12
+    }
+  ]
+}

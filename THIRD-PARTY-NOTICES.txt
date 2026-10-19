@@ -36,6 +36,79 @@ production must be produced on a Mac and can be created using
 CodeBrix.RustTools, where Apple's toolchain, SDK and code signing are
 available under Apple's own license terms.
 
+CodeBrix.RustTools.CrateBuilder, the third package built from this
+repository, incorporates no third-party source code either. It references
+the two packages above and three further CodeBrix packages as NuGet
+dependencies; it does not repack their files into its own nupkg, and each
+ships its own THIRD-PARTY-NOTICES.txt and licence files, which remain the
+authoritative notices:
+
+  - CodeBrix.LibGit2.MitLicenseForever (https://github.com/ellisnet/CodeBrix.LibGit2):
+    the managed CodeBrix.LibGit2 assembly, ported from LibGit2Sharp, is
+    licensed under the MIT License. The native libgit2 binaries it ships
+    under runtimes/<rid>/native/ are licensed under the GNU General Public
+    License version 2 WITH the libgit2 linking exception, which permits
+    linking the compiled library into other programs and distributing the
+    combination without restriction from the GPL (the GPL still applies to
+    libgit2 itself). The binaries also contain third-party code libgit2
+    bundles, and the Android binaries statically contain Mbed TLS; libgit2's
+    COPYING ships beside every native binary as LICENSE-Libgit2.txt and
+    LICENSE-MbedTls.txt beside the Android ones. See that package's
+    THIRD-PARTY-NOTICES.txt (notices 1 to 4).
+  - CodeBrix.WebGpu.Native.MitLicenseForever (https://github.com/ellisnet/CodeBrix.WebGpu):
+    the managed binding is licensed under the MIT License. Its
+    runtimes/<rid>/native/ codebrix_wgpu libraries are built from a crate
+    written for that repository (MIT) that links wgpu-native and the wgpu
+    crates; LICENSE-WgpuNative.txt beside every binary holds the full licence
+    text of wgpu-native, webgpu-headers and every crate compiled into the
+    library. Its include/ folder carries webgpu-headers' webgpu.h
+    (BSD-3-Clause) and wgpu-native's wgpu.h (MIT) unmodified, with the same
+    LICENSE-WgpuNative.txt. When a build links a crate to the CodeBrix WebGPU
+    engine, CrateBuilder uses those headers and the target's binary from the
+    referenced package as they are. See that package's
+    THIRD-PARTY-NOTICES.txt.
+  - CodeBrix.Templating.BsdLicenseForever (https://github.com/ellisnet/CodeBrix.Templating):
+    licensed under the BSD 2-Clause License; it incorporates Scriban
+    (https://github.com/scriban/scriban, Copyright (c) Alexandre Mutel,
+    BSD 2-Clause License). See that package's THIRD-PARTY-NOTICES.txt.
+
+The CrateBuilder assembly embeds the source of a small Rust program,
+codebrix-api-extractor (src/CodeBrix.RustTools.CrateBuilder/Facade/Extraction/
+Tool/: Cargo.toml, Cargo.lock, src/*.rs, SCHEMA.md), written for this
+repository and licensed under the MIT License like the rest of it.
+CrateBuilder writes that source to its scratch folder and builds it with
+cargo - on the machine, or inside a build container - to read the public
+API of the crate being wrapped; the program is never copied into a build's
+output. Building it downloads its dependencies from crates.io; they are not
+part of this repository or of any package and are used under their own
+licences (versions as pinned by the embedded Cargo.lock):
+  - syn 2.0.119 and syn 3.0.9 (David Tolnay): MIT OR Apache-2.0
+  - proc-macro2 1.0.107 (David Tolnay, Alex Crichton): MIT OR Apache-2.0
+  - quote 1.0.47 (David Tolnay): MIT OR Apache-2.0
+  - serde, serde_core and serde_derive 1.0.229 (Erick Tryzelaar, David
+    Tolnay): MIT OR Apache-2.0
+  - serde_json 1.0.154 (https://github.com/serde-rs/json): MIT OR Apache-2.0
+  - itoa 1.0.18 (David Tolnay): MIT OR Apache-2.0
+  - unicode-ident 1.0.27 (David Tolnay): (MIT OR Apache-2.0) AND Unicode-3.0
+  - memchr 2.8.3 (Andrew Gallant, bluss): Unlicense OR MIT
+  - zmij 1.0.23 (David Tolnay): MIT
+
+The CrateBuilder assembly also embeds a Containerfile
+(Building/ManyLinux/Containerfile.x86_64, written for this repository) used
+for LinuxBaseline.ManyLinux. It references - does not redistribute - the
+public image quay.io/pypa/manylinux_2_28_x86_64 (pinned by digest), and when
+a consumer asks for a ManyLinux build the image build downloads rustup-init
+(checked against a pinned SHA-256) and the Rust toolchain from
+static.rust-lang.org. Those are obtained by the consumer's Docker engine at
+the consumer's request and are used under their own licences; nothing of
+them is stored in this repository or in any package.
+
+The facade crates and wrapper projects CrateBuilder generates are produced
+from templates written for this repository (rendered with Scriban through
+CodeBrix.Templating); a generated wrapper carries the wrapped crate's own
+licence files (licenses/) and names the crate's licence in its
+THIRD-PARTY-NOTICES.txt.
+
 The list of license identifiers in the OpenSourceLicense enumeration follows
 the SPDX License List (https://spdx.org/licenses/); only identifiers, names
 and classifications are used, no license texts.
@@ -56,6 +129,15 @@ Repository content that is not part of the NuGet package:
     machine-generated messages about the samples' code and the names and
     versions of the crates those samples depend on; no third-party source
     code.
+
+  CrateBuilder test project (tests/CodeBrix.RustTools.CrateBuilder.Tests/):
+  written for this repository. Facade/Model/samples/*.json are documents
+  written by codebrix-api-extractor for rust-samples/test_project_15 and
+  test_project_17 and for a small workspace of edge cases written for the
+  tests; they contain no third-party content. Its live tests generate small
+  crates, wrappers and console apps in sandboxes under the test output; their
+  dotnet restores use xunit.v3 and CodeBrix.WebGpu.Native from the NuGet
+  cache, and nothing they build is stored in the repository.
 
   Docker test project (tests/CodeBrix.RustTools.Docker.Tests/): written
   for this repository; it holds no fixture files. Its live tests build the

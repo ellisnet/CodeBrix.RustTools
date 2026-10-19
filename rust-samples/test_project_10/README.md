@@ -1,7 +1,7 @@
 # test_project_10 - intentional compiler warnings
 
 **This sample is supposed to produce warnings.** It is a valid program that builds,
-runs and passes `cargo test`, but its source deliberately triggers many distinct compiler
+runs and passes `cargo test`, but its source deliberately causes many distinct compiler
 warnings across two files, plus one build-script warning. It exists so a build tool
 (such as CodeBrix.RustTools) can be tested on capturing, parsing and counting warnings.
 

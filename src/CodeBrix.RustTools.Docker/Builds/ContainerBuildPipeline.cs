@@ -103,6 +103,61 @@ internal sealed class ContainerBuildPipeline
             : BuildContainer.WorkDirectory + "/" + relative.Trim('/');
     }
 
+    /// <summary>
+    /// The host folder copied into <c>/work</c>: <see cref="ContainerBuildRequest.CopyRootDirectory"/>
+    /// when set (it must contain <paramref name="workspaceRoot"/>), else the workspace root.
+    /// </summary>
+    /// <exception cref="ArgumentException">The copy root does not contain the workspace
+    /// root.</exception>
+    internal static string CopyRootFor(ContainerBuildRequest request, string workspaceRoot)
+    {
+        if (string.IsNullOrWhiteSpace(request.CopyRootDirectory))
+        {
+            return workspaceRoot;
+        }
+
+        var copyRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.CopyRootDirectory));
+        var relative = Path.GetRelativePath(copyRoot, workspaceRoot);
+        if (relative != "." && (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)))
+        {
+            throw new ArgumentException($"CopyRootDirectory '{copyRoot}' does not contain the project's workspace root '{workspaceRoot}'.", "request");
+        }
+
+        return copyRoot;
+    }
+
+    /// <summary>
+    /// The options of one target's cargo run: the build's options plus the
+    /// <see cref="ContainerBuildRequest.TargetEnvironment"/> entries of every requested target
+    /// that resolves to <paramref name="target"/> (the same object when there are none).
+    /// </summary>
+    internal static CargoBuildOptions OptionsForTarget(ContainerBuildRequest request, CargoBuildOptions options, CrossTarget target, DockerEngineInfo engine)
+    {
+        var extra = new List<KeyValuePair<string, string>>();
+        foreach (var pair in request.TargetEnvironment ?? new Dictionary<CrossTarget, IDictionary<string, string>>())
+        {
+            if (pair.Value == null || !BuildTargetsFor(new[] { pair.Key }, engine).Contains(target))
+            {
+                continue;
+            }
+
+            extra.AddRange(pair.Value);
+        }
+
+        if (extra.Count == 0)
+        {
+            return options;
+        }
+
+        var copy = options.Clone();
+        foreach (var pair in extra)
+        {
+            copy.Environment[pair.Key] = pair.Value;
+        }
+
+        return copy;
+    }
+
     public async Task<ContainerBuildResult> RunAsync(CancellationToken cancellationToken)
     {
         var total = Stopwatch.StartNew();
@@ -144,7 +199,9 @@ internal sealed class ContainerBuildPipeline
             image = await _workbench.EnsureImageAsync(imageSpec, new LineProgress(this, BuildStage.EnsuringImage), token).ConfigureAwait(false);
 
             Enter(BuildStage.StartingContainer, "Starting a build container from " + image.Reference);
-            container = await _workbench.StartContainerAsync(image, _request.ContainerOptions, token).ConfigureAwait(false);
+            var containerOptions = (_request.ContainerOptions ?? new BuildContainerOptions()).Clone();
+            containerOptions.AndroidApiLevel = _request.AndroidApiLevel;
+            container = await _workbench.StartContainerAsync(image, containerOptions, token).ConfigureAwait(false);
             destroy = _request.DestroyContainerAfterBuild ?? !container.KeepOnDispose;
 
             Enter(BuildStage.CopyingSource, "Copying the source into the container");
@@ -180,9 +237,9 @@ internal sealed class ContainerBuildPipeline
                 options.MacOSInstallName = MacOSLinkProfile.DefaultInstallName(project);
             }
 
-            var copiedRoot = project.WorkspaceRootManifestPath != null
+            var copiedRoot = CopyRootFor(_request, project.WorkspaceRootManifestPath != null
                 ? Path.GetDirectoryName(project.WorkspaceRootManifestPath)
-                : project.Directory;
+                : project.Directory);
             var containerDirectory = ContainerDirectoryFor(copiedRoot, project.Directory);
             var copy = await _workbench.CopySourceAsync(container, copiedRoot, _request.ExtraExcludePatterns, new CopyProgressReporter(this), token).ConfigureAwait(false);
             source = new ContainerBuildSource
@@ -244,7 +301,7 @@ internal sealed class ContainerBuildPipeline
                 foreach (var target in buildTargets)
                 {
                     Report(BuildStage.Building, $"Building for {CrossTargetInfo.Get(target)}");
-                    var targetOptions = options;
+                    var targetOptions = OptionsForTarget(_request, options, target, engine);
                     if (estimate)
                     {
                         if (!metadataByTarget.TryGetValue(target, out var metadata))
@@ -252,7 +309,7 @@ internal sealed class ContainerBuildPipeline
                             metadata = await _workbench.TryGetMetadataCoreAsync(container, containerDirectory + "/Cargo.toml", MetadataOptionsFor(options, target), token).ConfigureAwait(false);
                         }
 
-                        targetOptions = options.Clone();
+                        targetOptions = targetOptions.Clone();
                         targetOptions.ExpectedCrateCount = CrateCountEstimator.Estimate(metadata, CargoCommand.Build, options);
                     }
 

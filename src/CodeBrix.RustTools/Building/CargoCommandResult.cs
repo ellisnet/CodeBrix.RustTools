@@ -126,7 +126,7 @@ public class CargoCommandResult
     public bool TimedOut { get; init; }
 
     /// <summary>
-    /// True when cargo was killed because the cancellation token fired and
+    /// True when cargo was killed because the cancellation token was cancelled and
     /// <see cref="CargoBuildOptions.ThrowOnCancellation"/> was false.
     /// </summary>
     public bool WasCancelled { get; init; }

@@ -1,0 +1,17 @@
+# Workspace with path dependencies and workspace inheritance: the staging fixture of
+# CodeBrix.RustTools.CrateBuilder. No external crates; builds offline.
+[workspace]
+members = ["crates/*"]
+# external/ holds a path dependency that is deliberately NOT a member.
+exclude = ["external"]
+resolver = "3"
+
+[workspace.package]
+version = "0.18.2"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+# Members inherit this path dependency with `beta.workspace = true`.
+beta = { path = "crates/beta" }

@@ -20,7 +20,7 @@ internal static class ProcessRunner
     /// </summary>
     /// <exception cref="RustToolsException">The process could not be started (for example the
     /// executable does not exist); the inner exception has the operating-system detail.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired and
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled and
     /// <see cref="ProcessRunRequest.ThrowOnCancellation"/> is true. The process tree has already
     /// been killed when this is thrown.</exception>
     public static async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, CancellationToken cancellationToken = default)

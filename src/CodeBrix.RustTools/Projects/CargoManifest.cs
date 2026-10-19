@@ -177,6 +177,7 @@ public sealed class CargoManifest
             AutoTests = TomlHelpers.GetBoolean(table, "autotests"),
             AutoBenches = TomlHelpers.GetBoolean(table, "autobenches"),
             InheritedFields = inherited,
+            Workspace = table.TryGetValue("workspace", out var workspaceValue) ? workspaceValue as string : null,
         };
     }
 

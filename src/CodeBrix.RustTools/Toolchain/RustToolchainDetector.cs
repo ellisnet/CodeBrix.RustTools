@@ -14,7 +14,7 @@ namespace CodeBrix.RustTools.Toolchain;
 /// Detects the Rust toolchain installed on this machine by running the tools themselves
 /// (<c>cargo --version</c>, <c>rustc -vV</c>, <c>rustup show</c>, ...). Detection is read-only:
 /// it never installs, updates or downloads anything, and it sets <c>RUSTUP_AUTO_INSTALL=0</c>
-/// so that a <c>rust-toolchain.toml</c> naming an uninstalled toolchain cannot trigger a
+/// so that a <c>rust-toolchain.toml</c> naming an uninstalled toolchain cannot start a
 /// download.
 /// </summary>
 public sealed class RustToolchainDetector

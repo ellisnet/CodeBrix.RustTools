@@ -12,7 +12,7 @@ it is packaged, and the conventions the source follows.
 
 PURPOSE AND SCOPE
 =================
-This repository produces two NuGet packages, built from one solution:
+This repository produces three NuGet packages, built from one solution:
 
     PackageId:  CodeBrix.RustTools.MitLicenseForever
     Assembly:   CodeBrix.RustTools
@@ -25,6 +25,14 @@ This repository produces two NuGet packages, built from one solution:
     Project:    src/CodeBrix.RustTools.Docker/CodeBrix.RustTools.Docker.csproj
     License:    MIT
     Consumer documentation: src/CodeBrix.RustTools.Docker/AGENT-README.txt
+
+    PackageId:  CodeBrix.RustTools.CrateBuilder.MitLicenseForever
+    Assembly:   CodeBrix.RustTools.CrateBuilder
+    Project:    src/CodeBrix.RustTools.CrateBuilder/
+                CodeBrix.RustTools.CrateBuilder.csproj (one path, wrapped)
+    License:    MIT
+    Consumer documentation:
+                src/CodeBrix.RustTools.CrateBuilder/AGENT-README.txt
 
 CodeBrix.RustTools uses the Rust tools that are ALREADY INSTALLED on the
 machine (Windows, macOS, Debian-based Linux) to inspect, license-check, build
@@ -54,6 +62,16 @@ IContainerFileTransport interface (implementation: DockerCopyTransport), so
 no shared folders are needed and remote engines work. macOS targets are
 rejected; see the PHASE 3 section at the end for the planned macOS
 cross-build work that belongs to this package.
+
+CodeBrix.RustTools.CrateBuilder turns a Rust crate (a local Cargo.toml, or a
+Git repository cloned with CodeBrix.LibGit2) into native binaries for chosen
+runtime identifiers - built with CodeBrix.RustTools on the host or with
+CodeBrix.RustTools.Docker in a container - plus a JSON build record and,
+optionally, a generated C facade and a .NET wrapper class library. Its
+dependencies: ProjectReferences to both sibling projects, and pinned
+PackageReferences to CodeBrix.LibGit2.MitLicenseForever,
+CodeBrix.WebGpu.Native.MitLicenseForever and
+CodeBrix.Templating.BsdLicenseForever. See the CRATEBUILDER section below.
 
 
 REPOSITORY LAYOUT
@@ -137,6 +155,73 @@ REPOSITORY LAYOUT
                                      ContainerBuildPipeline
       Internal/                      ResourceLabels, LineSplitter, Hashing
 
+    src/CodeBrix.RustTools.CrateBuilder/
+                                     the CodeBrix.RustTools.CrateBuilder
+                                     library project (packable); its
+                                     README.md and AGENT-README.txt live
+                                     beside the csproj
+      (root)                         CrateBuilder (facade),
+                                     CrateBuilderOptions,
+                                     CrateBuilderException and its five
+                                     derived exceptions, InternalsVisibleTo.cs
+      Targets/                       BuildMode, CrateTarget, CrateTargets,
+                                     LinuxBaseline, CrateBuildProfile,
+                                     ArtifactProvenance, CrateTargetOutcome
+      Requests/                      CrateBuildRequest, CrateSource,
+                                     LocalManifestSource, GitRepositorySource,
+                                     WrapperOptions, WrapperPackaging,
+                                     WrapPlan, FacadeOverride, FacadeMode
+      Results/                       CrateBuildStage, CrateBuildProgress,
+                                     CrateReadinessReport, BuildReadinessIssue,
+                                     CrateSourceIdentity, CrateTargetResult,
+                                     WrapperResult, CrateBuildResult
+      Records/                       BuildRecord, TargetRecord,
+                                     ArtifactRecord, WrapperRecord,
+                                     FacadeRecord
+      Internal/Pipeline/             the stage seams, their data types, the
+                                     run context, CrateBuilderStages
+                                     (CreateDefault wires the real stages)
+                                     and CrateBuildPipeline (see
+                                     CRATEBUILDER)
+      Internal/Readiness/            ReadinessChecker and the host / Docker
+                                     target evaluators
+      Sources/                       SourceResolver (local + LibGit2 clone /
+                                     fetch / checkout, reuse rule),
+                                     CrateManifestFacts, GitRemoteUrl
+      Staging/                       WorkspaceStager (copy to
+                                     <run>/stage/<package>/src, vendoring to
+                                     .codebrix-vendor/, path rewrites),
+                                     WorkspaceRootFinder (cargo's rule),
+                                     ManifestDependencyScanner,
+                                     ManifestPathRewriter, SourceHasher,
+                                     StagingFileSystem, StagedPathRewrite
+      Facade/                        FacadeGenerator (the IFacadeGenerator:
+                                     extraction -> planning -> rendering)
+        Extraction/                  ApiExtractor and the embedded
+                                     codebrix-api-extractor source (Tool/)
+        Model/                       CrateApiModel (the extractor's JSON)
+        Planning/                    MappingPlanner, PlannerRun, the type
+                                     table, WrapReportWriter; Model/ = the
+                                     MappingPlan the renderers walk
+        Rendering/                   FacadeRenderer, FacadeSourceBuilder,
+                                     FacadeConventions, Templates/*.sbn
+      Building/                      ModeBuildDriver (the IBuildDriver),
+                                     HostBuildDriver, DockerBuildDriver,
+                                     TargetMatrix, contributions,
+                                     CargoOptionsFactory, ManyLinux/
+                                     (Containerfile.x86_64), Verification/
+                                     (NativeArtifactReader, the verifiers,
+                                     VerificationRecorder)
+      WebGpu/                        NativePackageLocator, WebGpuLinkStager
+                                     (IBuildContribution), WebGpuLinkVerifier,
+                                     WebGpuLinkRecipe; Internal/ = the
+                                     ELF / PE / Mach-O link readers
+      Wrapper/                       WrapperProjectWriter (IWrapperWriter);
+                                     Generation/ (C# member emitter, type
+                                     spellings, model builder), Model/ (template
+                                     model), Rendering/ (template loader,
+                                     generated-files.json), Templates/*.sbn
+
     tests/CodeBrix.RustTools.Tests/  the xUnit v3 test project; one folder
                                      per source folder, plus the facade
                                      tests (RustWorkbench*Tests.cs) at its
@@ -162,11 +247,23 @@ REPOSITORY LAYOUT
                                      definitions, SynchronousProgress and
                                      copies of RepoPaths / SampleSandbox
 
-    rust-samples/                    thirteen small Rust projects
-                                     (test_project_01 ... 13) used as
-                                     read-only test inputs; 13 is the cdylib
-                                     used by the cross-compilation tests
-                                     (EXTRAS-README.txt)
+    tests/CodeBrix.RustTools.CrateBuilder.Tests/
+                                     the CrateBuilder package's xUnit v3
+                                     test project, in folders mirroring the
+                                     source; Helpers/ holds copies of
+                                     RepoPaths / SampleSandbox /
+                                     SynchronousProgress, Capabilities
+                                     (the cargo and Docker skips) and
+                                     CCompiler (the C header checks);
+                                     EndToEnd/ holds the end-to-end tests
+                                     through the public CrateBuilder
+
+    rust-samples/                    seventeen small Rust projects
+                                     (test_project_01 ... 13, 15 ... 18)
+                                     used as read-only test inputs; 13 is
+                                     the cdylib used by the cross-compilation
+                                     tests, 15 - 18 are the CrateBuilder
+                                     inputs (EXTRAS-README.txt)
     tools/macos-cross/               Phase 3 notes (where the stub derivation
                                      lives, how to inspect a stub) and a
                                      Mac-side check script; maintainer-only,
@@ -179,9 +276,9 @@ REPOSITORY LAYOUT
                                      icon-codebrix-128.png, LICENSE,
                                      MAINTAINER-README.txt, README-INDEX.txt,
                                      README.md and THIRD-PARTY-NOTICES.txt;
-                                     its Tests folder carries both test
-                                     projects; both library projects sit at
-                                     the solution root. rust-samples/ and
+                                     its Tests folder carries the three test
+                                     projects; the three library projects sit
+                                     at the solution root. rust-samples/ and
                                      tools/ are deliberately NOT in the
                                      solution.
 
@@ -192,7 +289,13 @@ REPOSITORY LAYOUT
 Source folders map to namespaces: CodeBrix.RustTools.Toolchain, .Registry,
 .Projects, .Licensing, .Dependencies, .Building, .Running, .Archives and
 .Internal (internal types only); and CodeBrix.RustTools.Docker.Engine,
-.Images, .Containers, .Artifacts, .Builds and .Internal.
+.Images, .Containers, .Artifacts, .Builds and .Internal. The one exception
+is CodeBrix.RustTools.CrateBuilder: every PUBLIC type is in the root
+namespace CodeBrix.RustTools.CrateBuilder (one using for consumers), while
+the files are grouped in the Targets/, Requests/, Results/ and Records/
+folders; its internal types follow their folders
+(CodeBrix.RustTools.CrateBuilder.Internal.Pipeline, .Internal.Readiness,
+.Sources, .Staging, .Facade.*, .Building.*, .WebGpu.*, .Wrapper.*).
 
 
 BUILDING
@@ -226,8 +329,9 @@ assemblies directly instead:
     dotnet tests/CodeBrix.RustTools.Docker.Tests/bin/Debug/net10.0/
         CodeBrix.RustTools.Docker.Tests.dll (one path, wrapped here)
 
-Both test projects are xUnit v3 with SilverAssertions; no coverage collector
-is referenced. Each has an InternalsVisibleTo grant from its library.
+All three test projects are xUnit v3 with SilverAssertions; no coverage
+collector is referenced. Each has an InternalsVisibleTo grant from its
+library.
 
 Sandbox strategy:
   * Tests NEVER run cargo inside rust-samples/. SampleSandbox.FromSample(n)
@@ -417,11 +521,132 @@ The Docker suite (tests/CodeBrix.RustTools.Docker.Tests):
     deliberate change to the generated text must update the pin - and it
     means every derived image built before the change is rebuilt.
 
+The CrateBuilder suite (tests/CodeBrix.RustTools.CrateBuilder.Tests):
+
+    dotnet test --project tests/CodeBrix.RustTools.CrateBuilder.Tests
+
+  * Unit tests need nothing: the target table, request and wrapper
+    validation, the build record's JSON, the exceptions, the stage order and
+    failure mapping (fake stages through the internal CrateBuilder
+    constructor), and the readiness mapping from constructed toolchain and
+    engine data (fake tool files in sandboxes).
+  * Live tests SKIP BY NAME (Helpers/Capabilities and the per-area helpers
+    below) when cargo / rustc, a usable Docker engine, the dotnet CLI, the
+    CodeBrix.WebGpu.Native package, a cross toolchain or the network is
+    missing - never a passing stub. None of them installs anything.
+  * Same sandbox rule: never run cargo inside rust-samples/; the host
+    readiness test reads a SampleSandbox copy of sample 13.
+  * Sources/ and Staging/ tests clone LOCAL upstream repositories made with
+    CodeBrix.LibGit2 (file:// URLs, no network) and stage sandbox copies of
+    sample 18. Live: one clone of https://github.com/ellisnet/CodeBrix.RustTools
+    (skips without a route to github.com:443) and one RustWorkbench test of
+    the staged sample 18 with a vendored path dependency (skips without cargo).
+    Submodules: a local superproject records a second local repository as a
+    submodule (TreeDefinition.AddGitLink + .gitmodules); the clone holds it
+    only with RecurseSubmodules, also when it appears upstream after a clone
+    is reused. The credentials callback is passed through but not exercised:
+    file:// remotes never ask for credentials.
+  * Build-driver live tests build sample 13 (cdylib, no dependencies) in
+    sandbox copies. Host: linux-x64, linux-arm64 / linux-riscv64 (Debian
+    cross gcc), both Android ABIs (NDK via ANDROID_NDK_HOME / ANDROID_HOME),
+    macOS through the link profile only when CODEBRIX_CRATEBUILDER_MACOS_SYSROOT
+    names an exported sysroot, Windows only with the gnullvm targets and
+    llvm-mingw; each skips with the readiness check's own reason. Docker
+    (skip without an engine; x86-64 engine): linux-x64 + win-x64 in the rust
+    image, and ONE ManyLinux linux-x64 build (pulls the manylinux_2_28 image
+    and builds the rustup image the first time, about 1.5 minutes). The
+    fixture's workbench uses label prefix codebrix.rusttools.cratebuilder.tests
+    and removes its containers, volumes and derived images
+    (CODEBRIX_RUSTTOOLS_KEEP_DOCKER_CACHE=1 keeps them). Durations go to
+    build-driver-log.txt.
+  * NativeArtifactReader tests read copies of the nine CodeBrix.WebGpu.Native
+    binaries from the NuGet cache (skip if the package is not restored),
+    including the Android API level of the two Android engine binaries (33).
+  * WebGpu/: the locator, reader and verifier tests read the
+    CodeBrix.WebGpu.Native package of the NuGet cache (copies in sandboxes)
+    and skip by name when it is absent. WebGpuLinkLiveTests build sample 16
+    (host triple; linux-arm64 with the cross gcc; android-arm64 at API 33
+    with an NDK - each skips by name without its toolchain), verify the link,
+    and on the host load the module AFTER CodeBrixWebGpuNative.EnsureLoaded(),
+    call probe_api_version (== 2) and check /proc/self/maps holds exactly one
+    libcodebrix_wgpu.so. The "does not reference the engine" warning path is
+    tested on the .NET runtime's own libSystem.Native.so (Linux only).
+  * The API extractor's live tests build the tool once into
+    tests/.../bin/<configuration>/net10.0/cratebuilder-scratch/ (kept between
+    runs) and extract sandbox copies of samples 15, 17 and 02; they skip by
+    name without cargo. The Docker extraction tests (ApiExtractorDockerTests,
+    an isolated workbench labelled codebrix.rusttools.cratebuilder.tests.extract)
+    build the tool in a container from a fresh scratch folder - run inside
+    the container, retrieved and run on a Linux host of the engine's
+    architecture, and the fallback to the container when the retrieved
+    program cannot run - and skip by name without a usable engine. The
+    in-container route copies the tool and the staged crate side by side
+    (CopySourceIntoAsync: /work/codebrix-api-extractor and /work/crate), so
+    nothing relies on the tool's binary surviving a later copy. Their
+    fixture removes its containers and volumes at the end unless
+    CODEBRIX_RUSTTOOLS_KEEP_DOCKER_CACHE=1.
+  * Facade/Planning/ tests plan the checked-in samples in Facade/Model/samples/
+    (no cargo); the two live rows re-extract samples 15 and 17 with the
+    host-built extractor and skip by name without cargo.
+  * Facade/Rendering/ tests render hand-built plans (Fixtures/) and the
+    planner's plan of the datacrate sample (no cargo); the live tests stage
+    sample 15 and a small crate the test writes into its sandbox
+    (CoverageCrate: every shape), build the facades with RustWorkbench
+    (release, offline, no warnings allowed), check the exports with
+    NativeArtifactReader and call them through NativeLibrary; one builds a
+    WebGPU-linked facade with the link stager. They skip by name without
+    cargo (and without the WebGpu.Native package for that one). The header
+    tests render the facades of the three model samples and CoverageCrate and
+    compile each <lib>.h, included twice, with the machine's C compiler (CC,
+    else cc) as -std=c11 -Wall -Wextra -Werror -pedantic-errors; the
+    DefaultWrapRules end-to-end test does the same for its datakit header
+    (skip / no check without a C compiler).
+  * Wrapper/ tests render hand-built plans (Wrapper/Fixtures/) and real
+    planner plans of Facade/Model/samples/ into sandboxes with fake native
+    files. Live (skip without the dotnet CLI; the second also without
+    cargo): the generated projects are built with -warnaserror; sample 13
+    is built in a sandbox, wrapped in pass-through mode, packed, referenced
+    from a console app that prints add(2,3)=5, and its generated xUnit smoke
+    test is run. Restores use the local NuGet cache (xunit.v3,
+    CodeBrix.WebGpu.Native).
+  * EndToEnd/ runs the public CrateBuilder from a crate (or a URL) to a
+    wrapper that a generated console app builds with -warnaserror and runs:
+    sample 15 (every datacrate shape), the rendering tests' every-shape crate
+    planned by the real planner, sample 13 for linux-x64 + linux-arm64 with
+    Packaging and `dotnet pack`, sample 17, sample 18 offline with a vendored
+    path dependency, sample 16 WebGPU-linked (+ android-arm64 when an NDK is
+    found), a WebGPU-linked facade that calls no engine function (the
+    warning path), a cdylib that exports nothing (FacadeMode.Auto routes it
+    through the facade stages; FacadeMode.Never keeps it and fails), a crate
+    that does not compile, the readiness sets of
+    both modes, the Git route (clone of the public repository, reuse,
+    CleanUpAfterBuild; skips without github.com:443 - one probe shared by
+    the whole run, Capabilities.CanReachGitHubAsync, three 20-second
+    attempts, so parallel load cannot cause a false skip) and Docker mode (sample
+    15 for linux-x64 + win-x64 in the rust image, ManyLinux linux-x64, and
+    sample 15 with the API extraction FORCED into the container
+    (ApiExtractorDockerRoute.RunInContainer through the internal stages
+    constructor), so that route runs on a machine with a host toolchain too,
+    sample 16 WebGPU-linked for linux-x64 + win-x64 + android-arm64 (the
+    Android file must carry API level 33, and a console app calls the linux
+    build after the engine is loaded), and sample 13 for both Android ABIs
+    without WebGPU (API level 24; the first run builds the Android image
+    layer, a few minutes);
+    isolated workbench labelled codebrix.rusttools.cratebuilder.tests.e2e
+    with its own cache volume and container prefix, all removed at the end
+    unless CODEBRIX_RUSTTOOLS_KEEP_DOCKER_CACHE=1), and a Docker-mode build of
+    a workspace member whose root has [patch], .cargo/config.toml and
+    [profile.release] settings (DockerWorkspaceEndToEndTests, its own
+    workbench labelled codebrix.rusttools.cratebuilder.tests.workspace). The builds share the
+    scratch root tests/.../bin/<configuration>/net10.0/cratebuilder-scratch/
+    (the extractor is built once); each test's duration goes to e2e-log.txt
+    in the test output folder.
+
 
 PACKAGING AND PUBLISHING
 ========================
 GeneratePackageOnBuild is true, so every build of a library project emits a
-fresh .nupkg; one solution build produces both packages.
+fresh .nupkg; one solution build produces all three packages.
 
 Versioning is the CodeBrix date-stamped scheme, computed in the csproj from
 System.DateTime.UtcNow as 1.<years-since-base>.<day-of-year>.<minute-of-day>.
@@ -429,8 +654,10 @@ It is monotonically increasing but is NOT SemVer. Two builds inside the same
 UTC minute produce the SAME version - never publish two packages from one
 minute. Do not replace the version block with a literal <Version>.
 
-Both csproj files carry the canonical version block, each evaluated on its
-own. The Docker package's dependency on CodeBrix.RustTools comes from the
+The three csproj files carry the canonical version block, each evaluated on
+its own. CrateBuilder's dependencies on CodeBrix.RustTools and
+CodeBrix.RustTools.Docker come from ProjectReferences, as the Docker
+package's does; check its nuspec the same way before pushing. The Docker package's dependency on CodeBrix.RustTools comes from the
 ProjectReference and always names the CodeBrix.RustTools version produced by
 the same build; the two packages' own version numbers are normally the same
 but can differ by a minute when a build straddles a minute boundary.
@@ -445,17 +672,19 @@ CodeBrix.RustTools nupkg from that build, and
 CodeBrix.Docker.MitLicenseForever with the pinned version.
 
 What ships inside each nupkg (declared as <None ... Pack="true">):
-    icon-codebrix-128.png    (PackageIcon; repo root, both packages)
+    icon-codebrix-128.png    (PackageIcon; repo root, every package)
     README.md                (PackageReadmeFile; the root one for
                               CodeBrix.RustTools, the one beside the csproj
-                              for CodeBrix.RustTools.Docker)
+                              for CodeBrix.RustTools.Docker and
+                              CodeBrix.RustTools.CrateBuilder)
     AGENT-README.txt         (the consumer guide; same split)
-    THIRD-PARTY-NOTICES.txt  (repo root, both packages)
+    THIRD-PARTY-NOTICES.txt  (repo root, every package)
 MAINTAINER-README.txt, EXTRAS-README.txt, README-INDEX.txt, rust-samples/,
 tools/ and the test fixtures are repo-only and are NOT packed.
 
-The csproj files pin the CodeBrix.TomlParse and CodeBrix.Docker versions they
-were built against; bump a pin deliberately and re-run the full test suite.
+The csproj files pin the CodeBrix.TomlParse, CodeBrix.Docker,
+CodeBrix.LibGit2, CodeBrix.WebGpu.Native and CodeBrix.Templating versions
+they were built against; bump a pin deliberately and re-run the full test suite.
 Jeremy publishes the packages.
 
 
@@ -691,6 +920,296 @@ NOTES
     .github/copilot-instructions.md, .junie/guidelines.md) all point at
     README-INDEX.txt. Keep them in sync with the canonical family versions;
     they are not per-repo content.
+
+CRATEBUILDER
+============
+Pipeline: CrateBuilder.BuildAsync validates and copies the request, then
+Internal/Pipeline/CrateBuildPipeline.RunAsync runs the stages in
+CrateBuildStage order. Each stage sits behind an internal interface; the
+implementations are chosen in CrateBuilderStages.CreateDefault(), and tests
+pass fakes through the internal CrateBuilder(CrateBuilderOptions,
+CrateBuilderStages) constructor. The seams (all in Internal/Pipeline/):
+    IReadinessChecker   Readiness            Internal/Readiness/ReadinessChecker
+    ISourceResolver     ResolvingSource      Sources/SourceResolver
+    IWorkspaceStager    Staging              Staging/WorkspaceStager
+    IFacadeGenerator    ExtractingApi, Planning, RenderingFacade
+                                             Facade/FacadeGenerator
+    IBuildDriver        Building             Building/ModeBuildDriver (Host- or
+                                             DockerBuildDriver with the request's
+                                             contributions and verifiers)
+    IArtifactVerifier   Verifying            Building/Verification/VerificationRecorder
+    IWrapperWriter      Wrapping             Wrapper/WrapperProjectWriter
+  Data between stages: ResolvedSource, StagedWorkspace, FacadeGenerationResult
+  (+ FacadeExport); CrateBuilderContext carries the options, the run folder
+  (<scratch>/runs/<utc stamp>-<8 hex>), the lazily created RustWorkbench and
+  DockerRustWorkbench (owned by the CrateBuilder), the progress sink, the
+  readiness report, warnings, and the ToolchainDescription /
+  WebGpuNativeVersion a stage may set for the record.
+Rules the pipeline enforces (fenced by CrateBuilderPipelineTests):
+  * ArgumentException from Validate propagates; every stage failure becomes
+    FailedStage + FailureMessage. A CrateBuilderException's own Stage wins
+    (FacadeGenerationException names ExtractingApi / Planning /
+    RenderingFacade); one created without a stage gets the running stage.
+  * Readiness failure: no record, no run folder. After Readiness the record
+    (crate-build-record.json in OutputDirectory) is always written, then
+    CleaningUp runs (ResolvedSource.CleanUp, then the run folder unless
+    KeepScratch) - also after the caller's cancellation, which then
+    propagates. Request.Timeout covers the stages after Readiness and is
+    reported as a failure of the running stage.
+  * Unbuildable targets become NotBuildableInThisMode (readiness guidance
+    attached); the build driver receives a request copy holding only the
+    buildable targets. No compiled target = a Building failure.
+  * The facade stages run per request.FacadeMode (CrateBuildPipeline
+    .NeedsFacade): Always / Never as named; Auto when a wrapper is requested
+    or the staged crate's CrateTypes lack "cdylib" (a cdylib without a
+    wrapper is built as it is first, without extracting its API, so a plain
+    cdylib build never needs the extractor or its crates). When that build
+    leaves a target Failed with DefaultArtifactVerifier.NoExportsNote in its
+    message (NeedsAutoFallback), the same run generates the facade and calls
+    the build driver again (warning + FacadeRecord.Reason =
+    AutoFallbackReason). A generated facade replaces
+    StagedWorkspace.ManifestPath and sets IsFacade; StagedWorkspace.CrateName
+    becomes the plan's LibName (the facade's [lib] name = the native file's
+    base = the wrapper's DllImport name), never the facade's PACKAGE name
+    (FacadeGenerationResult.CrateName, what -p takes).
+  * The wrap report is written into the run folder (report/WRAP-REPORT.txt +
+    .json) and copied next to the build record in Recording
+    (CrateBuildResult.WrapReportPath, BuildRecord.WrapReportFile); the record
+    gets a FacadeRecord (Generated, LibName, PackageName, the exports).
+  * Default provenance: macOS targets are Distributable only in host mode on
+    a Mac, else DevelopmentBuild.
+Readiness: ReadinessReportBuilder.ForHost / ForDocker assemble the report
+from detection data (testable without tools); HostTargetEvaluator uses
+ToolchainRequirements / ToolchainReadiness / InstallGuidanceProvider,
+MacOSLinkProfile.ForToolchain and WindowsGnullvmLinkProfile.ClangPath (the
+llvm-mingw search: CrateBuilderOptions.LlvmMingwDirectory, LLVM_MINGW_HOME,
+PATH); DockerTargetEvaluator uses CrossTargetInfo (Android needs an x86-64
+engine; a derived image needs the docker CLI).
+Targets: CrateTargets maps every CrateTarget through CrossTargetInfo of the
+Docker package (ToCrossTarget), so both modes use one triple per RID.
+Sources and staging (Sources/, Staging/): the reuse rule, the clean-up rule
+and the staging layout are written out in the XML remarks of SourceResolver
+and WorkspaceStager. In short: a clone folder that already holds a non-bare
+clone of the same origin URL is fetched and checked out again (safe
+checkouts, detached at the remote default branch's tip when nothing is
+named); anything else in a non-empty folder is an error and is never
+touched; CleanUpAfterBuild deletes the clone folder (also the consumer's
+own). Staging copies the workspace root (WorkspaceRootFinder = cargo's
+nearest-[workspace] rule, which lives in CodeBrix.RustTools'
+CargoProjectLocator.FindWorkspaceRootManifest - strict mode, with the clone
+root as boundary - so the two packages share one rule) to
+<run>/stage/<package>/src/, vendors path dependencies that leave the copied
+tree to .codebrix-vendor/<n>-<name>/ (a SIBLING of src/, so cargo never sees
+them as implicit members) and rewrites only the staged manifests losslessly
+(TomlParse syntax tree). Never copied: .git, cargo's target/, .codebrix-*
+folders at any depth, the VCS / CI / editor root folders listed in
+StagingFileSystem.ExcludedRootHiddenFolders (other hidden root folders such as
+.cargo and .sqlx ARE copied: builds read them), and the scratch root / run folder
+when they lie inside the crate (StagingFileSystem.CopyTree's excluded
+folders; without that a scratch folder inside the crate copied itself until
+the path was too long). SourceHash = SHA-256 over (path, NUL, bytes, NUL)
+of every staged file in ordinal path order.
+API extraction (Facade/Extraction/, Facade/Model/): codebrix-api-extractor is a
+small syn-based Rust program whose SOURCE lives in Facade/Extraction/Tool/
+(Cargo.toml, Cargo.lock, src/*.rs, SCHEMA.md) and is embedded in the assembly
+(EmbeddedResource, logical names ApiExtractorTool/<path>). ApiExtractor
+materialises it to <scratch>/api-extractor/<16 hex of its SHA-256>/, builds it
+once there (host: RustWorkbench, release, --locked; Docker without a usable host
+toolchain: in a container - on the in-container route the tool and the staged
+crate are copied side by side into /work/codebrix-api-extractor and /work/crate
+with CopySourceIntoAsync) and runs it against the staged crate; the JSON
+(schema version 1, SCHEMA.md) is read into CrateApiModel. Path types carry the
+tool's own name resolution (resolve.rs annotate_types: "resolved" = the canonical
+path of the crate's struct / enum / alias the path names in the module where it
+was written, through its use declarations and globs; "external" = the first
+segment is imported from another crate; "unresolved" = nothing of that name is in
+scope there), and PlannerRun.ResolveLocal trusts them before its older
+module / crate-root / unique-name lookups (kept for the 2015 edition and for
+documents without the fields). SCHEMA.md and the C#
+model must change together: CrateApiModelTests round-trips the checked-in
+documents in tests/.../Facade/Model/samples/ and fails on any property the model
+does not mirror. Changing the tool: edit the files in Tool/, build and clippy a
+COPY of the folder in scratch (never run cargo inside src/ - it writes target/),
+copy a regenerated Cargo.lock back if dependencies changed, and regenerate the
+three sample documents from copies of rust-samples/test_project_15, _17 and the
+edge-case workspace (run the tool from the folder holding them, so the paths in
+the documents stay relative). A changed source gives a new folder hash, so every
+CrateBuilder version builds its own copy.
+Planning (Facade/Planning/): MappingPlanner turns the CrateApiModel and an
+optional WrapPlan into a MappingPlan (Facade/Planning/Model/, plain data the
+renderers walk as is). PlannerRun applies the tier-1 rule table in this order:
+reachability and cfg (CfgEvaluator, per requested target, three-valued), the
+WrapPlan selection (PathGlob: '*' = any run, tried on every path form with and
+without crate::), C-like enums, mirrors (Copy, all fields public, C-able
+fields, recursive), handles (any other non-generic struct), functions (type
+table in TypeMappings), field accessors of handles (AddFieldAccessors: a
+getter per pub field that crosses C, a setter, a from-fields constructor
+when all fields are pub and cross C; then DropUnusedHandles keeps a handle
+only when a crate function uses it, or it has a from-fields constructor, or
+Default plus accessors, and keeps what the kept accessors hand out), names,
+overrides, release functions, constants (ConstantLiterals: plain literals of
+number / bool / &str type become C# const values; nothing crosses C), doc
+notes. Result and argument rewrites live in the planner and reach the
+renderer only as RustCallExpression text: OwnedReturn wraps the call ("{0}")
+to turn a shared-reference result into an owned copy (Clone::clone,
+String::from, to_vec, .cloned()) or a path / OS string into a Result<String,
+&str> (to_str, never lossy); argument expressions build PathBuf / OsString /
+Path::new from the &str local; text-bounded generics are substitutions of
+&str / &[u8] (rustc infers them from the argument). Lists are
+MappingKind.ValueSlice (in) / ValueVec (out) with the element mapping in
+TypeMapping.Element: plain values convert element by element (mirror / enum /
+bool / array conversions); object elements are pointers (in: handle_ref +
+clone per element, the wrapper AddRefs every object for the call; out:
+HandleBox::boxed per element); string elements are <prefix>str_ref structs in
+(the wrapper packs all UTF-8 bytes into one pinned array) and a buffer of
+Buffer structs out (Buffer::from_buffers). Data-carrying enums are handles
+keyed by their RustEnum in PlannerRun.handles; AddVariantName adds Variant()
+and one constructor per variant (Generated "variant", like field accessors
+they never keep an otherwise unused handle). Names: ONE C namespace - the fixed names
+(<prefix>buffer, last_error_message, free_buffer, free_string, status), the
+<PREFIX>STATUS_* macros, the fixed-array structs, then every type (ordinal
+by Rust path), every enum constant and every function are de-duplicated
+together ("_2"), because the renderer refuses any C-name clash and a C
+header cannot hold a typedef and a function of one name. Every list in the
+plan is ordered ordinally (or by mirror dependency), so planning twice gives
+identical JSON (MappingPlannerTests fences it on the three model samples, and
+a live test fences that a fresh extraction of samples 15 and 17 plans exactly
+like the checked-in samples). WrapReportWriter writes WRAP-REPORT.txt and its
+JSON twin WRAP-REPORT.json (MappingPlanJson: back references written as C
+names).
+Rendering (Facade/Rendering/): FacadeRenderer turns a MappingPlan into the facade
+crate under <stage>/.codebrix-facade/<lib>_facade/ (Cargo.toml, Cargo.lock copy,
+src/lib.rs, <lib>.h, build.rs when WebGPU-linked, FACADE-README.txt,
+generated-files.json). FacadeSourceBuilder holds every type decision (FFI types,
+conversions, checks, export bodies); the Scriban templates in
+Facade/Rendering/Templates/ (embedded resources) only lay text out, under the
+rules in FacadeTemplates (fresh context, strict variables, limits that throw,
+"\n"). GeneratedFilePublisher renders into a temporary folder, publishes
+atomically, rewrites only changed files and removes only files the previous
+generated-files.json listed. FacadeConventions holds the status codes the C
+header, the wrapper and the docs quote. The facade is its own workspace, and
+cargo reads [patch] / [replace] and [profile.*] only from the root manifest of
+the workspace being built, so FacadeRenderer.WorkspacePatches and
+.WorkspaceProfiles copy those tables of the staged workspace root into the
+facade's Cargo.toml (paths re-based; panic forced to "unwind" in dev and
+release).
+Template pitfall (MSBuild culture detection): an EmbeddedResource named like
+"X.cs.sbn" or "X.de.sbn" is taken as a satellite resource of that culture (cs =
+Czech) and moved out of the main assembly unless the item sets
+WithCulture="false". Both template ItemGroups in the CrateBuilder csproj set it;
+any new embedded-resource pattern needs it too.
+Building (Building/): ModeBuildDriver picks HostBuildDriver or
+DockerBuildDriver per request and hands it the contributions (WebGpuLinkStager
+when LinkToCodeBrixWebGpu) and the verifiers (DefaultArtifactVerifier, plus
+WebGpuLinkVerifier when linked; the Docker driver adds GlibcFloorVerifier for
+ManyLinux). The drivers verify every artifact ONCE, right after it is built;
+the Verifying stage (VerificationRecorder) only records - it copies notes that
+start with "WARNING: " into the build's warnings. A facade build gets no
+--locked and no --features (CargoOptionsFactory, isFacade: the facade's lock
+is the upstream's copy without the facade's own entry, and the features are
+in the facade's dependency line). The Docker driver copies the WHOLE staging
+root (DockerBuildDriver.CopyRootFor) to /work and runs cargo per target in
+the built manifest's folder, given as an ABSOLUTE container path
+(ContainerWorkingDirectoryFor). All targets share ONE container: each target's
+cargo run gets its own options (its contribution environment; contribution
+rustflags in CARGO_TARGET_<TRIPLE>_RUSTFLAGS, which CodeBrix.RustTools.Docker
+appends to its own per-target flags), and the container links Android at
+HostBuildDriver.AndroidApiLevelFor (BuildContainerOptions.AndroidApiLevel, 33
+when WebGPU-linked) - the same level as host mode. The "{workspace}" contribution token is the staging root on
+the host and /work in Docker mode. The ManyLinux limits (linux-x64 only, x86-64
+engine) are TargetMatrix.ManyLinuxLimit, used by the readiness check and the
+driver alike.
+WebGPU verification: an artifact that links libcodebrix_wgpu by name passes;
+one that imports wgpu* symbols (ELF / Mach-O undefined symbols, read by
+WebGpu/Internal) or exports them, or links another wgpu library, fails; one
+that references the engine not at all (the linker drops an unused library,
+e.g. a WebGPU-linked facade with no engine call) passes with a WARNING note.
+WebGPU staging (WebGpu/): NativePackageLocator finds the CodeBrix.WebGpu.Native
+package folder (CrateBuilderOptions.WebGpuNativePackageDirectory, else the NuGet
+global packages folder at the version the csproj pins, then the application's
+runtimes/ for the binaries only); WebGpuLinkStager (an IBuildContribution)
+copies include/ and the target's engine binary into <stage>/.codebrix-wgpu/ and
+returns CODEBRIX_WGPU_INCLUDE_DIR / CODEBRIX_WGPU_LIB_DIR and "-L native=..."
+with the "{workspace}" token, so one contribution serves both modes;
+WebGpuLinkRecipe holds the crate-side lines the generated facade gets.
+Verification notes (DefaultArtifactVerifier): format and architecture, the
+needed libraries, the export count (first ten names), the highest GLIBC_
+version (ELF), and for Android the API level of the NDK's .note.android.ident
+(ElfFileReader; "linked for Android API level N"), which is how the tests
+prove that both drivers link Android at 24, or 33 when WebGPU-linked.
+Wrapping (Wrapper/): WrapperProjectWriter (the IWrapperWriter) resolves the
+folder, refuses a non-empty folder without generated-files.json, builds the
+template model (Generation/WrapperModelBuilder: names, the <Lib> / <Lib>Library
+entry class rule, member placement, the first README example = the first entry
+that is not a constant, documented signatures without the global::<RootNamespace>.
+qualification the code needs; FunctionEmitter writes every member body;
+ManagedTypes spells the C# types and qualifies a type name only inside a class
+where a member has that spelling) and renders Templates/*.sbn
+(Rendering/WrapperTemplates; same strict Scriban rules as the facade). It then
+copies runtimes/<rid>/native/, the crate's licence files (licenses/), the wrap
+report, and writes generated-files.json (GeneratedFilesManifest: only listed
+files are replaced or removed on regeneration). Generated objects are sealed
+partial classes over an internal SafeHandle (Handle.cs.sbn).
+Fixtures: rust-samples/test_project_15 (datacrate: every tier-1 shape), 16
+(wgpu_link_probe: WebGPU route 1), 17 (hardcrate: mostly unmappable) and 18
+(a staging workspace) are the checked-in inputs (EXTRAS-README.txt). Several
+tests write small neutral crates into their sandbox instead: CoverageCrate
+(Facade/Rendering/Fixtures: every C shape), shapekit and its workspace
+(CrateShapesEndToEndTests: lifetimes, features, non_exhaustive, imports,
+nested workspaces, [patch] and .cargo/config.toml), datakit
+(DefaultWrapRulesEndToEndTests: fields, copies, paths, lists, constants, data
+enums), wskit (DockerWorkspaceEndToEndTests) and gitfix (Sources/
+GitTestRepository: local upstream repositories with tags, branches and a
+submodule, made with CodeBrix.LibGit2). New fixtures use neutral names only.
+Docker test fixtures: each has its OWN workbench (label prefix, cargo cache
+volume, container name prefix) and removes its containers, volumes and
+derived images at the end unless CODEBRIX_RUSTTOOLS_KEEP_DOCKER_CACHE=1:
+    DockerDriverFixture (Building/)        codebrix.rusttools.cratebuilder.tests
+    ApiExtractorDockerTests (Facade/...)   codebrix.rusttools.cratebuilder.tests.extract
+    DockerEndToEndFixture (EndToEnd/)      codebrix.rusttools.cratebuilder.tests.e2e
+    DockerWorkspaceEndToEndFixture         codebrix.rusttools.cratebuilder.tests.workspace
+The derived images are rebuilt from the engine's BuildKit cache on the next
+run (the Android and Windows layers take minutes only the first time on a
+machine). After a run, `docker ps -a` / `docker volume ls` /
+`docker images` filtered on label=<prefix>... must be empty.
+End-to-end suites: EndToEnd/ (Host, Git, Docker, CrateShapes, DefaultWrapRules,
+DockerWorkspace) is the acceptance suite - see TESTING for what each builds.
+Every change to the planner, renderer, wrapper or drivers must leave them
+green, and a fix gets a fence there or in the unit tests (neutral names).
+Packing: `dotnet pack src/CodeBrix.RustTools.CrateBuilder -c Release -o <dir>`
+(any Release build also packs, GeneratePackageOnBuild). The nupkg holds
+lib/net10.0/CodeBrix.RustTools.CrateBuilder.dll + .xml, README.md,
+AGENT-README.txt, THIRD-PARTY-NOTICES.txt and icon-codebrix-128.png at its
+root; inside the assembly are the embedded resources ApiExtractorTool/*
+(Cargo.toml, Cargo.lock, SCHEMA.md, src/*.rs - never a target/ folder),
+CodeBrix.RustTools.CrateBuilder.Building.ManyLinux.Containerfile.x86_64,
+CodeBrix.RustTools.CrateBuilder.Facade.Rendering.Templates.*.sbn and
+CodeBrix.RustTools.CrateBuilder.Wrapper.Templates.*.sbn. Check the list with
+`unzip -l` on the nupkg and System.Reflection's
+GetManifestResourceNames() on the packed dll before publishing.
+Sweeps (shake-out runs over many real crates): never from inside this
+repository and never against code you are not allowed to build. Write a
+scratch console driver OUTSIDE the repository with a ProjectReference to
+src/CodeBrix.RustTools.CrateBuilder/CodeBrix.RustTools.CrateBuilder.csproj.
+Give it a list file (one line per crate: a local Cargo.toml path or a Git URL
++ manifest path, and a neutral wrapper name), copy local sources into the
+scratch folder first (rsync without .git / target), set CARGO_TARGET_DIR to a
+scratch folder per source repository (shared dependencies are then built
+once), and per crate call CrateBuilder.BuildAsync with LocalManifestSource or
+GitRepositorySource, Mode Host or Docker, the targets, an OutputDirectory under
+scratch, Wrapper = { AssemblyName = RootNamespace = "<neutral name>" } and a
+per-crate CancellationToken (20 minutes is ample). Append one JSON line per
+crate to a results file (Success, FailedStage, FailureMessage, every
+CrateTargetResult, Record.Facade.ExportCount, the wrap report's counts and
+Elapsed) so a run can resume where it stopped, then `dotnet build
+-warnaserror` each generated wrapper. Classify every failure by rebuilding
+the staged copy with plain cargo (KeepScratch): upstream (plain cargo fails
+the same), environment (a missing system library), or a CrateBuilder bug.
+A bug is fixed here with a fence that uses a neutral synthetic crate - never
+a copy of the swept code - and nothing from the swept crates (names, paths,
+output) is written into this repository. Docker sweeps use a workbench with
+their own label prefix and call CleanupAsync at the end. Delete the scratch
+target folders afterwards (they grow to tens of gigabytes).
 
 PHASE 3: macOS CROSS-BUILD FROM LINUX (IMPLEMENTED 2026-10-09)
 ==============================================================

@@ -457,20 +457,26 @@ ToolchainRequirements (sealed class)
   bool RequireAndroidNdk (an NDK must have been found);
   IDictionary<string, LinuxLinkProfile> RequiredLinuxCrossTools (by
   triple: the profile's CompilerPath and ArchiverPath must exist on PATH
-  or in its BinDirectory)
+  or in its BinDirectory);
+  IDictionary<string, string> RequiredWindowsGnullvm (by gnullvm triple:
+  llvm-mingw's folder, or null to search LLVM_MINGW_HOME and PATH; the
+  triple's <machine>-w64-mingw32-clang must be found, LlvmMingwLocator)
   static ToolchainRequirements Default { get; }
   static ToolchainRequirements WithLintAndFormat()
   static ToolchainRequirements ForAndroid()   both 64-bit Android targets
                                               + the NDK
   static ToolchainRequirements ForLinuxCross(IEnumerable<string> triples,
       string binDirectory = null)   each target + its cross gcc and ar
+  static ToolchainRequirements ForWindowsGnullvm(IEnumerable<string> triples,
+      string llvmMingwDirectory = null)   each gnullvm target + llvm-mingw
 
 ToolchainReadiness (sealed class)
   static ToolchainReadiness Evaluate(RustToolchainInfo toolchain,
                                      ToolchainRequirements requirements = null)
   bool IsReady; IReadOnlyList<ReadinessIssue> Issues (blocking first);
   IReadOnlyList<RustTool> MissingTools, OutdatedTools; IReadOnlyList<string>
-  MissingTargets, MissingLinuxCrossTargets; bool AndroidNdkMissing;
+  MissingTargets, MissingLinuxCrossTargets, MissingLlvmMingwTargets; bool
+  AndroidNdkMissing;
   RustToolchainInfo Toolchain;
   ToolchainRequirements Requirements; OperatingSystemKind OperatingSystem
 
@@ -478,7 +484,8 @@ ReadinessIssue: ReadinessIssueKind Kind; RustTool? Tool; string Subject,
   Message; bool IsBlocking
 ReadinessIssueKind: ToolMissing, ToolOutdated, ToolStatusUnknown,
   TargetMissing, ToolchainNotInstalled, AndroidNdkMissing,
-  LinuxCrossToolMissing (Subject = the triple)
+  LinuxCrossToolMissing (Subject = the triple), LlvmMingwMissing (Subject =
+  the gnullvm triple)
   (a required tool whose status is Unknown - could not be determined - is
   a ToolStatusUnknown warning, never a blocker; this includes the C
   toolchain)
@@ -491,7 +498,9 @@ InstallGuidance (sealed class)
 InstallGuidanceTopic: InstallRust, UpdateRust, InstallRustup,
   InstallComponents, InstallCToolchain, AddTargets, InstallToolchain,
   InstallAndroidNdk, InstallLinuxCrossTools (items = Linux triples:
-  `rustup target add` + the Debian cross packages)
+  `rustup target add` + the Debian cross packages), InstallLlvmMingw (items =
+  gnullvm triples: `rustup target add` + unpack an llvm-mingw release and set
+  LLVM_MINGW_HOME)
 InstallGuidanceProvider (static class)
   IReadOnlyList<InstallGuidance> ForReadiness(ToolchainReadiness readiness)
   InstallGuidance ForUpdate(OperatingSystemKind operatingSystem,
@@ -521,6 +530,18 @@ AndroidNdk (sealed class) - an installed Android NDK
       DirectoryNotFoundException when the folder has no
       toolchains/llvm/prebuilt/<hostTag>/bin
   static bool TryLoad(string directory, string hostTag, out AndroidNdk ndk)
+LlvmMingwLocator (static class) - finding llvm-mingw, never installing it
+  const string HomeVariable = "LLVM_MINGW_HOME"; const string ReleasesUrl
+  static string FindBinDirectory(string triple,
+      string explicitDirectory = null)
+      explicitDirectory/bin, then explicitDirectory (no fallback when it is
+      set), else LLVM_MINGW_HOME/bin, then each PATH folder; the folder must
+      hold <machine>-w64-mingw32-clang for the triple; null when none does
+  static string FindBinDirectory(string triple, string explicitDirectory,
+      Func<string,string> getEnvironmentVariable, Func<string,bool>
+      fileExists, bool windowsFileNames)
+  static WindowsGnullvmLinkProfile FindProfile(string triple,
+      string explicitDirectory = null)   null when not found
 AndroidNdkLocator (static class) - finding the NDK, never installing it
   static string HostTag          this machine's, or null when Google ships
                                  no NDK host tools for it
@@ -591,10 +612,13 @@ CargoProject (sealed class) - a project on disk
   string ManifestPath, Directory; CargoManifest Manifest; CargoLockFile
   LockFile (a member uses its workspace root's lock; null when none);
   RustWorkbenchOptions Options; bool IsWorkspaceRoot, IsVirtual; string
-  WorkspaceRootManifestPath (null for a standalone package); CargoManifest
+  WorkspaceRootManifestPath (null for a standalone package; cargo's rule,
+  see CargoProjectLocator.FindWorkspaceRootManifest); CargoManifest
   WorkspaceRootManifest; string Name (null for a virtual manifest);
   CargoPackage EffectivePackage (workspace inheritance applied);
-  IReadOnlyList<string> WorkspaceMemberDirectories
+  IReadOnlyList<string> WorkspaceMemberDirectories   listed AND implicit
+      members (CargoProjectLocator.FindWorkspaceMembers), root first when
+      the root has a [package]
   IReadOnlyList<CargoProject> GetWorkspaceMembers()
   IReadOnlyList<CargoTargetDeclaration> GetDeclaredTargets()
       declared + conventional targets (src/lib.rs, src/main.rs, src/bin,
@@ -624,7 +648,8 @@ CargoManifest (sealed class) - a parsed Cargo.toml
 
 CargoPackage: string Name, Version, Edition, Description, License,
   LicenseFile, Repository, Homepage, Documentation, Readme, RustVersion,
-  BuildScript, Links, DefaultRun; IReadOnlyList<string> Authors, Keywords,
+  BuildScript, Links, DefaultRun, Workspace (the package.workspace pointer
+  to its workspace root, or null); IReadOnlyList<string> Authors, Keywords,
   Categories, InheritedFields; bool? Publish, AutoBins, AutoExamples,
   AutoTests, AutoBenches; bool BuildScriptDisabled;
   bool IsInherited(string field);
@@ -710,8 +735,32 @@ CargoProjectLocator (static class) - finding projects in a folder tree
                                       workspace root
   string FindNearestManifest(string directory)        at or above
   string FindWorkspaceRootManifest(string packageDirectory)
+      cargo's rule: a [workspace] manifest is its own root;
+      [package] workspace = "..." names the root; else the NEAREST ancestor
+      [workspace] that does not exclude the package, which must then list it
+      or have it as an implicit member; null for a standalone package (and
+      for one cargo would refuse); unreadable manifests are skipped
+  string FindWorkspaceRootManifest(string packageDirectory,
+      string boundaryDirectory, bool throwOnError)
+      the same, not searching above boundaryDirectory; throwOnError ->
+      InvalidDataException for an unreadable manifest, a package.workspace
+      pointer to no [workspace], or a package inside a workspace that neither
+      lists nor excludes it
+  bool IsExcludedFromWorkspace(string workspaceDirectory,
+      CargoWorkspace workspace, string packageDirectory)
+      under an exclude entry and NOT under a literal members entry (an
+      explicit member is never excluded)
+  bool IsWorkspaceMember(string workspaceDirectory,
+      CargoManifest workspaceManifest, string packageDirectory)
+  IReadOnlyList<string> FindWorkspaceMembers(string workspaceDirectory,
+      CargoManifest workspaceManifest)
+      the root (when it has a [package]), the members entries (globs), and
+      the implicit members: path dependencies (also via
+      [workspace.dependencies]) of a member that lie inside the workspace
+      folder and are not excluded, transitively
   IReadOnlyList<string> ExpandWorkspaceMembers(string workspaceDirectory,
-      CargoWorkspace workspace)
+      CargoWorkspace workspace)   members entries only (globs expanded,
+      excludes applied as above)
 
 --- Licensing (CodeBrix.RustTools.Licensing) ---
 
@@ -1854,6 +1903,7 @@ https://github.com/ellisnet/CodeBrix.RustTools/tree/main/
   Universal (fat) files .......... Building/MacOSUniversalBinaryTests.cs
   Universal build on a Mac ....... RustWorkbenchMacOSUniversalTests.cs
   NDK discovery .................. Toolchain/AndroidNdkLocatorTests.cs
+  llvm-mingw discovery ........... Toolchain/LlvmMingwLocatorTests.cs
   Android link profile ........... Building/AndroidLinkProfileTests.cs
   Linux cross link profile ....... Building/LinuxLinkProfileTests.cs
   Windows gnullvm link profile ... Building/WindowsGnullvmLinkProfileTests.cs
@@ -1906,6 +1956,9 @@ By hand:        LinuxLinkProfile.ForTriple(LinuxLinkProfile.Arm64Triple)
                 await wb.BuildAsync(p, options);
 
 --- Windows via llvm-mingw (any host with llvm-mingw unpacked) ---
+Ready?          ToolchainReadiness.Evaluate(info,
+                    ToolchainRequirements.ForWindowsGnullvm(WindowsGnullvmLinkProfile.Triples))
+Find it:        LlvmMingwLocator.FindProfile(WindowsGnullvmLinkProfile.Arm64Triple)
                 new WindowsGnullvmLinkProfile("/opt/llvm-mingw/bin")
                     .ApplyTo(options, WindowsGnullvmLinkProfile.Arm64Triple);
                 await wb.BuildAsync(p, options);

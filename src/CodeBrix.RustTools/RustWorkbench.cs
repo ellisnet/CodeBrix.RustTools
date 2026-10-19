@@ -308,7 +308,7 @@ public sealed class RustWorkbench
     /// <exception cref="CargoCommandException">cargo could not be started, <c>cargo
     /// metadata</c> failed for the license gate, or the clippy / rustfmt component is not
     /// installed.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="CargoBuildOptions.ThrowOnCancellation"/> is true.</exception>
     public async Task<CargoCommandResult> RunCargoAsync(CargoProject project, CargoCommand command, CargoBuildOptions options = null, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
     {
@@ -606,7 +606,7 @@ public sealed class RustWorkbench
     /// <exception cref="ArgumentNullException"><paramref name="artifact"/> is null.</exception>
     /// <exception cref="RustToolsException">The artifact has no executable, the file no longer
     /// exists, or it could not be started.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="RunOptions.ThrowOnCancellation"/> is true.</exception>
     public Task<RunResult> RunAsync(BuildArtifact artifact, RunOptions options = null, CancellationToken cancellationToken = default)
         => _binaryRunner.RunAsync(artifact, options, cancellationToken);

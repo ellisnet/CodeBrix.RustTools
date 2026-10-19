@@ -39,7 +39,7 @@ public sealed class BuiltBinaryRunner
     /// <exception cref="ArgumentNullException"><paramref name="artifact"/> is null.</exception>
     /// <exception cref="RustToolsException">The artifact has no executable (a library or build
     /// script), the file no longer exists, or it could not be started.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="RunOptions.ThrowOnCancellation"/> is true.</exception>
     public Task<RunResult> RunAsync(BuildArtifact artifact, RunOptions options = null, CancellationToken cancellationToken = default)
     {
@@ -62,7 +62,7 @@ public sealed class BuiltBinaryRunner
     /// <exception cref="ArgumentException"><paramref name="executablePath"/> is blank.</exception>
     /// <exception cref="RustToolsException">The file does not exist or could not be started.</exception>
     /// <exception cref="DirectoryNotFoundException">The working folder does not exist.</exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> fired
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled
     /// and <see cref="RunOptions.ThrowOnCancellation"/> is true.</exception>
     public async Task<RunResult> RunAsync(string executablePath, RunOptions options = null, CancellationToken cancellationToken = default)
     {

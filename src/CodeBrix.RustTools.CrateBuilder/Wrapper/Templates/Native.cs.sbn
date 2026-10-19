@@ -1,0 +1,263 @@
+using System;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
+{{~ if model.links_web_gpu ~}}
+using CodeBrix.WebGpu.Native;
+{{~ end ~}}
+
+namespace {{ model.root_namespace }};
+
+/// <summary>
+/// The native declarations of the {{ model.lib_name }} library and its loader. Internal: the public
+/// types of this assembly are the API.
+/// </summary>
+internal static unsafe partial class {{ model.native_class_name }}
+{
+    /// <summary>The library name every declaration below imports from.</summary>
+    internal const string LibraryName = "{{ model.lib_name }}";
+
+    private static readonly string[] PackagedRuntimeIdentifiers = { {{ model.runtime_identifiers_literal }} };
+
+    static {{ model.native_class_name }}()
+    {
+{{~ if model.links_web_gpu ~}}
+        // The crate links codebrix_wgpu: the CodeBrix WebGPU engine must be loaded (and its
+        // contract version checked) BEFORE this library, so the system loader reuses it.
+        CodeBrixWebGpuNative.EnsureLoaded();
+{{~ end ~}}
+        try
+        {
+            NativeLibrary.SetDllImportResolver(typeof({{ model.native_class_name }}).Assembly, Resolve);
+        }
+        catch (InvalidOperationException)
+        {
+            // A resolver is already registered for this assembly (hand-written code); it is used.
+        }
+    }
+{{~ if !model.is_pass_through ~}}
+
+    /// <summary>The status codes every generated export returns.</summary>
+    internal enum Status
+    {
+        /// <summary>Success.</summary>
+        Ok = 0,
+
+        /// <summary>A required pointer argument was null.</summary>
+        NullArgument = -1,
+
+        /// <summary>An argument was invalid (a length, or text that is not UTF-8).</summary>
+        InvalidArgument = -2,
+
+        /// <summary>The Rust function returned an error; its text is the last error message.</summary>
+        UpstreamError = -3,
+
+        /// <summary>The Rust code panicked; the panic message is the last error message.</summary>
+        Panic = -4,
+
+        /// <summary>The object was consumed by an earlier call.</summary>
+        HandleConsumed = -5,
+    }
+
+    /// <summary>An owned buffer returned by the library (bytes; release it exactly once).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Buffer
+    {
+        /// <summary>The first byte.</summary>
+        public byte* Data;
+
+        /// <summary>The length in bytes.</summary>
+        public nuint Length;
+
+        /// <summary>The allocation's capacity in bytes.</summary>
+        public nuint Capacity;
+    }
+{{~ if model.uses_str_ref ~}}
+
+    /// <summary>One string of a list of strings passed in (UTF-8, not NUL-terminated).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct StrRef
+    {
+        /// <summary>The first byte (null when the length is 0).</summary>
+        public byte* Data;
+
+        /// <summary>The length in bytes.</summary>
+        public nuint Length;
+    }
+{{~ end ~}}
+{{~ end ~}}
+
+    /// <summary>The runtime identifier this process runs as (portable form, for example
+    /// <c>linux-x64</c>).</summary>
+    internal static string CurrentRuntimeIdentifier()
+    {
+        var architecture = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "x64",
+            Architecture.Arm64 => "arm64",
+            Architecture.RiscV64 => "riscv64",
+            Architecture.X86 => "x86",
+            Architecture.Arm => "arm",
+            var other => other.ToString().ToLowerInvariant(),
+        };
+
+        if (OperatingSystem.IsAndroid())
+        {
+            return "android-" + architecture;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return "win-" + architecture;
+        }
+
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst())
+        {
+            return "osx-" + architecture;
+        }
+
+        return OperatingSystem.IsLinux() ? "linux-" + architecture : RuntimeInformation.RuntimeIdentifier;
+    }
+
+    /// <summary>The native file name for a runtime identifier.</summary>
+    internal static string NativeFileName(string runtimeIdentifier) => runtimeIdentifier switch
+    {
+{{~ for line in model.file_name_arm_lines ~}}
+{{ line }}
+{{~ end ~}}
+        var rid when rid.StartsWith("win-", StringComparison.Ordinal) => LibraryName + ".dll",
+        var rid when rid.StartsWith("osx-", StringComparison.Ordinal) => "lib" + LibraryName + ".dylib",
+        _ => "lib" + LibraryName + ".so",
+    };
+
+    private static nint Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (!string.Equals(libraryName, LibraryName, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+
+        var rid = CurrentRuntimeIdentifier();
+        var fileName = NativeFileName(rid);
+        var expected = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", fileName);
+        if (File.Exists(expected))
+        {
+            return NativeLibrary.Load(expected);
+        }
+
+        var beside = Path.Combine(AppContext.BaseDirectory, fileName);
+        if (File.Exists(beside))
+        {
+            return NativeLibrary.Load(beside);
+        }
+
+        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var handle))
+        {
+            return handle;
+        }
+
+        var packaged = PackagedRuntimeIdentifiers.Length == 0 ? "none" : string.Join(", ", PackagedRuntimeIdentifiers);
+        throw new DllNotFoundException(
+            $"The native library '{LibraryName}' for this machine ({rid}) was not found. Expected {expected} " +
+            $"(or {fileName} beside the application, or on the system's library path). This wrapper includes native " +
+            $"files for: {packaged}. Build the crate for {rid} and regenerate the wrapper, or copy {fileName} to that path.");
+    }
+{{~ if !model.is_pass_through ~}}
+
+    /// <summary>The exception for a failed call: the last error message of this thread, or a
+    /// description of the status.</summary>
+    internal static Exception Failure(int status) => new {{ model.exception_class_name }}(status, LastErrorMessage() ?? DescribeStatus(status));
+
+    /// <summary>A plain description of a status code.</summary>
+    internal static string DescribeStatus(int status) => status switch
+    {
+        (int)Status.NullArgument => "A required argument was null.",
+        (int)Status.InvalidArgument => "An argument was invalid (a length, or text that is not valid UTF-8).",
+        (int)Status.UpstreamError => "The Rust function returned an error.",
+        (int)Status.Panic => "The Rust code panicked.",
+        (int)Status.HandleConsumed => "The object was consumed by an earlier call.",
+        _ => "The native library returned status " + status + ".",
+    };
+
+    /// <summary>The last error message stored by the library on this thread, or <c>null</c>.
+    /// The facade's protocol: <c>(NULL, 0, &amp;n)</c> asks for the length in bytes (status 0
+    /// with n = 0 when there is no message, or -2 when n is larger than the capacity 0), then
+    /// a buffer of n bytes receives the UTF-8 text (status 0; not NUL-terminated).</summary>
+    internal static string LastErrorMessage()
+    {
+        nuint length = 0;
+        var status = {{ model.last_error_function }}(null, 0, &length);
+        if ((status != (int)Status.Ok && status != (int)Status.InvalidArgument) || length == 0)
+        {
+            return null;
+        }
+
+        var bytes = new byte[checked((int)length)];
+        fixed (byte* pointer = bytes)
+        {
+            nuint written = 0;
+            if ({{ model.last_error_function }}(pointer, length, &written) != (int)Status.Ok)
+            {
+                return null;
+            }
+
+            return Encoding.UTF8.GetString(pointer, (int)Math.Min(written, length));
+        }
+    }
+{{~ if model.free_buffer_function ~}}
+
+    /// <summary>Copies an owned buffer into an array and releases the buffer.</summary>
+    internal static T[] TakeArray<T>(Buffer buffer)
+        where T : unmanaged
+    {
+        if (buffer.Data == null)
+        {
+            return Array.Empty<T>();
+        }
+
+        try
+        {
+            var count = checked((int)(buffer.Length / (nuint)sizeof(T)));
+            var result = new T[count];
+            new ReadOnlySpan<T>(buffer.Data, count).CopyTo(result);
+            return result;
+        }
+        finally
+        {
+            {{ model.free_buffer_function }}(buffer);
+        }
+    }
+{{~ end ~}}
+{{~ if model.free_string_function ~}}
+
+    /// <summary>Decodes an owned UTF-8 string buffer and releases the buffer.</summary>
+    internal static string TakeString(Buffer buffer)
+    {
+        if (buffer.Data == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return Encoding.UTF8.GetString(buffer.Data, checked((int)buffer.Length));
+        }
+        finally
+        {
+            {{ model.free_string_function }}(buffer);
+        }
+    }
+{{~ end ~}}
+{{~ end ~}}
+{{~ if !model.native_struct_lines.empty? ~}}
+
+{{~ for line in model.native_struct_lines ~}}
+{{ line }}
+{{~ end ~}}
+{{~ end ~}}
+
+{{~ for line in model.native_declaration_lines ~}}
+{{ line }}
+{{~ end ~}}
+}

@@ -37,4 +37,9 @@ public enum InstallGuidanceTopic
     /// the target's glibc headers) and the target's standard library for a Linux target of
     /// another processor architecture.</summary>
     InstallLinuxCrossTools,
+
+    /// <summary>Unpack an llvm-mingw release (clang, lld and the mingw-w64 runtime) and the
+    /// Windows gnullvm targets' standard libraries, for building Windows targets
+    /// (<c>WindowsGnullvmLinkProfile</c>), and name its folder with <c>LLVM_MINGW_HOME</c>.</summary>
+    InstallLlvmMingw,
 }

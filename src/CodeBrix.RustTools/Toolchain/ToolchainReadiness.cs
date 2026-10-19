@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using CodeBrix.RustTools.Building;
 using CodeBrix.RustTools.Internal;
 
 namespace CodeBrix.RustTools.Toolchain;
@@ -52,6 +53,11 @@ public sealed class ToolchainReadiness
     /// (<see cref="ToolchainRequirements.RequiredLinuxCrossTools"/>) were not found.</summary>
     public IReadOnlyList<string> MissingLinuxCrossTargets
         => Issues.Where(i => i.Kind == ReadinessIssueKind.LinuxCrossToolMissing && i.Subject != null).Select(i => i.Subject).Distinct().ToList();
+
+    /// <summary>The Windows gnullvm target triples whose llvm-mingw
+    /// (<see cref="ToolchainRequirements.RequiredWindowsGnullvm"/>) was not found.</summary>
+    public IReadOnlyList<string> MissingLlvmMingwTargets
+        => Issues.Where(i => i.Kind == ReadinessIssueKind.LlvmMingwMissing && i.Subject != null).Select(i => i.Subject).Distinct().ToList();
 
     /// <summary>True when an Android NDK was required and none can be used.</summary>
     public bool AndroidNdkMissing => Issues.Any(i => i.Kind == ReadinessIssueKind.AndroidNdkMissing);
@@ -140,6 +146,32 @@ public sealed class ToolchainReadiness
                 Kind = ReadinessIssueKind.LinuxCrossToolMissing,
                 Subject = triple,
                 Message = $"The cross tool{(missing.Count == 1 ? string.Empty : "s")} {string.Join(" and ", missing.Select(m => "'" + m + "'"))} for '{triple}' {(missing.Count == 1 ? "was" : "were")} not found{(pair.Value.BinDirectory == null ? " on PATH" : string.Empty)}.",
+                IsBlocking = true,
+            });
+        }
+
+        foreach (var pair in requirements.RequiredWindowsGnullvm.Where(p => !string.IsNullOrWhiteSpace(p.Key)))
+        {
+            var triple = pair.Key.Trim().ToLowerInvariant();
+            if (!WindowsGnullvmLinkProfile.IsWindowsGnullvmTriple(triple))
+            {
+                continue;
+            }
+
+            var windowsFileNames = toolchain.OperatingSystem == OperatingSystemKind.Windows;
+            if (LlvmMingwLocator.FindBinDirectory(triple, pair.Value, null, null, windowsFileNames) != null)
+            {
+                continue;
+            }
+
+            var tool = WindowsGnullvmLinkProfile.MachineOf(triple) + "-w64-mingw32-clang" + (windowsFileNames ? ".exe" : string.Empty);
+            issues.Add(new ReadinessIssue
+            {
+                Kind = ReadinessIssueKind.LlvmMingwMissing,
+                Subject = triple,
+                Message = string.IsNullOrWhiteSpace(pair.Value)
+                    ? $"llvm-mingw was not found for '{triple}': no '{tool}' under {LlvmMingwLocator.HomeVariable} or on PATH."
+                    : $"llvm-mingw was not found for '{triple}': no '{tool}' in '{pair.Value}' or its bin folder.",
                 IsBlocking = true,
             });
         }
