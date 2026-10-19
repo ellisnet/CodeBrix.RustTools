@@ -259,7 +259,35 @@ public static partial class DockerfileGenerator
     }
 
     /// <summary>
-    /// The full reference (<c>repository:hash</c>) of the derived image for a spec.
+    /// The hash that identifies a derived image built for a platform: the
+    /// <see cref="ComputeSpecHash(string)"/> of the Dockerfile text when
+    /// <paramref name="platform"/> is <c>null</c> or blank (the engine's own platform - the hash a
+    /// spec without <see cref="BuildImageSpec.Platform"/> always had), otherwise of the text
+    /// followed by a <c>platform=&lt;platform&gt;</c> line, so the images of one Dockerfile for
+    /// two platforms get two tags.
+    /// </summary>
+    /// <param name="dockerfileText">Text returned by <see cref="Generate"/>.</param>
+    /// <param name="platform">The image's platform (<see cref="BuildImageSpec.Platform"/>), or
+    /// <c>null</c>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="dockerfileText"/> is
+    /// <c>null</c>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="platform"/> is not valid (see
+    /// <see cref="Engine.DockerPlatforms.Normalize"/>).</exception>
+    public static string ComputeSpecHash(string dockerfileText, string platform)
+    {
+        var normalized = Engine.DockerPlatforms.Normalize(platform);
+        if (dockerfileText == null)
+        {
+            throw new ArgumentNullException(nameof(dockerfileText));
+        }
+
+        return normalized == null ? ComputeSpecHash(dockerfileText) : ComputeSpecHash(dockerfileText + "platform=" + normalized + "\n");
+    }
+
+    /// <summary>
+    /// The full reference (<c>repository:hash</c>) of the derived image for a spec (the hash
+    /// covers <see cref="BuildImageSpec.Platform"/> when it is set, see
+    /// <see cref="ComputeSpecHash(string, string)"/>).
     /// </summary>
     /// <param name="spec">The image description.</param>
     /// <param name="defaultRepository">The repository name to use when
@@ -274,7 +302,7 @@ public static partial class DockerfileGenerator
         BuildImageSpec.ThrowIfNull(spec);
         var repository = string.IsNullOrWhiteSpace(spec.ImageName) ? defaultRepository : spec.ImageName.Trim();
         Require(ImageNamePattern().IsMatch(repository ?? string.Empty), $"'{repository}' is not a valid image repository name.", nameof(spec.ImageName));
-        return repository + ":" + ComputeSpecHash(Generate(spec));
+        return repository + ":" + ComputeSpecHash(Generate(spec), spec.Platform);
     }
 
     /// <summary>

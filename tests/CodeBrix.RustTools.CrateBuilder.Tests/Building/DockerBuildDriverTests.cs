@@ -10,6 +10,8 @@ using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
 using CodeBrix.RustTools.CrateBuilder.Internal.Readiness;
 using CodeBrix.RustTools.CrateBuilder.Tests.Helpers;
 using CodeBrix.RustTools.Docker.Artifacts;
+using CodeBrix.RustTools.Docker.Engine;
+using CodeBrix.RustTools.Docker.Images;
 using SilverAssertions;
 using Xunit;
 
@@ -203,7 +205,7 @@ public class DockerBuildDriverTests : IClassFixture<DockerDriverFixture>
         //Arrange
         SkipUnlessX64Engine();
         using var harness = new BuildDriverHarness(nameof(BuildAsync_builds_linux_x64_in_the_manylinux_image_within_its_glibc_floor_SLOW_IMAGE_BUILD), Sample, dockerWorkbench: _docker.Workbench);
-        var request = harness.Request(BuildMode.Docker, CrateTarget.LinuxX64, CrateTarget.LinuxArm64);
+        var request = harness.Request(BuildMode.Docker, CrateTarget.LinuxX64, CrateTarget.WinX64);
         request.LinuxBaseline = LinuxBaseline.ManyLinux;
         request.Layout = ArtifactLayout.NuGetRuntimes;
         harness.Context.Readiness = TargetMatrixReadiness(request);
@@ -214,17 +216,108 @@ public class DockerBuildDriverTests : IClassFixture<DockerDriverFixture>
         //Assert
         results[0].Outcome.Should().Be(CrateTargetOutcome.Compiled, results[0].Message);
         results[1].Outcome.Should().Be(CrateTargetOutcome.NotBuildableInThisMode);
-        results[1].Message.Should().Be(ManyLinuxImages.ForeignArchitectureReason);
+        results[1].Message.Should().Be(ManyLinuxImages.NonLinuxReason);
         var path = results[0].ArtifactPaths.Single();
         path.Should().Be(Path.Combine(harness.OutputDirectory, "runtimes", "linux-x64", "native", "libtest_project_13.so"));
         var glibc = DefaultArtifactVerifier.HighestGlibcVersion(NativeArtifactReader.Read(path));
         glibc.Should().NotBeNull();
         Version.Parse(glibc).Should().BeLessThanOrEqualTo(Version.Parse(ManyLinuxImages.X64GlibcFloor));
-        results[0].VerificationNotes.Should().Contain(n => n.Contains("within the baseline's 2.28"));
+        results[0].VerificationNotes.Should().Contain(n => n.Contains("within the linux-x64 baseline's 2.28"));
         harness.Context.ToolchainDescription.Should().Contain("Containerfile image");
         harness.Context.ToolchainDescription.Should().Contain(ManyLinuxImages.X64BaseImage);
     }
 
     private CrateReadinessReport TargetMatrixReadiness(CrateBuildRequest request)
         => ReadinessReportBuilder.ForDocker(request.Targets.ToList(), _docker.Engine, request.LinuxBaseline);
+
+    private static CrateBuilderContext ContextIn(string runDirectory, string cargoTargetDirectory = null)
+        => new CrateBuilderContext(new CrateBuilderOptions { ScratchRootDirectory = runDirectory, CargoTargetDirectory = cargoTargetDirectory }, runDirectory, null, null, null);
+
+    [Fact]
+    public void GroupsFor_gives_manylinux_one_image_per_platform_with_the_foreign_ones_platform_set()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var context = ContextIn(sandbox.Directory, Path.Combine(sandbox.Directory, "shared"));
+        var request = new CrateBuildRequest { Mode = BuildMode.Docker, LinuxBaseline = LinuxBaseline.ManyLinux };
+        var x64Engine = new DockerEngineInfo { IsAvailable = true, Architecture = "x86_64" };
+        var targets = new[] { CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64 };
+
+        //Act
+        var groups = DockerBuildDriver.GroupsFor(request, context, x64Engine, targets);
+
+        //Assert
+        groups.Should().HaveCount(3);
+        groups.Select(g => g.Targets.Single()).Should().Equal(targets);
+        groups.Select(g => g.ImageSpec.Platform).Should().Equal(null, "linux/arm64", "linux/riscv64");
+        groups.Select(g => Path.GetFileName(g.ImageSpec.Containerfile)).Should().Equal("Containerfile.x86_64", "Containerfile.aarch64", "Containerfile.riscv64");
+        groups.Select(g => Path.GetFileName(Path.GetDirectoryName(g.ImageSpec.Containerfile))).Should().Equal("manylinux-x86_64", "manylinux-aarch64", "manylinux-riscv64");
+        groups.Select(g => g.SharedTargetDirectory).Should().Equal(
+            Path.Combine(sandbox.Directory, "shared", "docker", "manylinux-x86_64"),
+            Path.Combine(sandbox.Directory, "shared", "docker", "manylinux-aarch64"),
+            Path.Combine(sandbox.Directory, "shared", "docker", "manylinux-riscv64"));
+        groups.Select(g => g.SharedTargetDirectory).Distinct().Should().HaveCount(3, "the native builds of the three images all write release/, so they need folders of their own");
+    }
+
+    [Fact]
+    public void GroupsFor_asks_for_linux_amd64_explicitly_when_the_engine_is_not_x86_64()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var context = ContextIn(sandbox.Directory);
+        var request = new CrateBuildRequest { Mode = BuildMode.Docker, LinuxBaseline = LinuxBaseline.ManyLinux };
+        var arm64Engine = new DockerEngineInfo { IsAvailable = true, Architecture = "aarch64" };
+
+        //Act
+        var groups = DockerBuildDriver.GroupsFor(request, context, arm64Engine, new[] { CrateTarget.LinuxX64, CrateTarget.LinuxArm64 });
+
+        //Assert
+        groups.Select(g => g.ImageSpec.Platform).Should().Equal("linux/amd64", "linux/arm64");
+        groups.Should().OnlyContain(g => g.SharedTargetDirectory == null);
+    }
+
+    [Fact]
+    public void GroupsFor_keeps_the_rust_image_in_one_container_with_the_cross_layers()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var context = ContextIn(sandbox.Directory, Path.Combine(sandbox.Directory, "shared"));
+        var request = new CrateBuildRequest { Mode = BuildMode.Docker };
+        var x64Engine = new DockerEngineInfo { IsAvailable = true, Architecture = "x86_64" };
+
+        //Act
+        var group = DockerBuildDriver.GroupsFor(request, context, x64Engine, new[] { CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.WinX64 }).Single();
+
+        //Assert
+        group.Targets.Should().Equal(CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.WinX64);
+        group.ImageSpec.Platform.Should().BeNull();
+        group.ImageSpec.UsesContainerfile.Should().BeFalse();
+        group.ImageSpec.CrossTargets.Should().Contain(CrossTarget.LinuxArm64);
+        group.SharedTargetDirectory.Should().Be(Path.Combine(sandbox.Directory, "shared", "docker"));
+    }
+
+    [Fact]
+    public void DescribeImage_names_the_target_s_own_base_image_and_the_emulated_platform()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var spec = ManyLinuxImages.CreateSpec(CrateTarget.LinuxArm64, sandbox.Directory);
+        var image = new RustBuildImage
+        {
+            ImageName = "repo",
+            Tag = "containerfile-0123456789abcdef",
+            ImageId = "sha256:aa",
+            Spec = spec,
+            Platform = "linux/arm64",
+            ContainerfileImageReference = "repo:containerfile-0123456789abcdef",
+            IsBaseImage = true,
+        };
+        var engine = new DockerEngineInfo { IsAvailable = true, Architecture = "x86_64", ServerVersion = "29.9.1" };
+
+        //Act
+        var description = DockerBuildDriver.DescribeImage(image, engine);
+
+        //Assert
+        description.Should().Be($"Docker image repo:containerfile-0123456789abcdef (id sha256:aa, from Containerfile image repo:containerfile-0123456789abcdef ({ManyLinuxImages.Arm64BaseImage}, Rust {ManyLinuxImages.RustVersion}), platform linux/arm64 under emulation) on Docker engine 29.9.1 (x86_64)");
+    }
 }

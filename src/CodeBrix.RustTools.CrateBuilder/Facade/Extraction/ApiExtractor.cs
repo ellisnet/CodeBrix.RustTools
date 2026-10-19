@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeBrix.RustTools.Building;
+using CodeBrix.RustTools.CrateBuilder.Building;
 using CodeBrix.RustTools.CrateBuilder.Facade.Model;
 using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
 using CodeBrix.RustTools.Docker;
@@ -36,6 +37,10 @@ namespace CodeBrix.RustTools.CrateBuilder.Facade.Extraction;
 /// run there; the JSON comes back on standard output. The container's target
 /// volume is kept (named after the tool version) so later runs reuse the build.</description></item>
 /// </list>
+/// With <see cref="CrateBuilderOptions.CargoTargetDirectory"/> the tool's cargo runs use
+/// <c>api-extractor/&lt;hash&gt;/</c> (host) or <c>api-extractor-docker/&lt;hash&gt;/</c>
+/// (container, bind-mounted, see <see cref="SharedCargoTarget"/>) below it as cargo's target
+/// folder; the hash is the tool version's, as in the scratch folder.
 /// Diagnostics of severity warning or error become context warnings.
 /// </summary>
 internal sealed class ApiExtractor
@@ -237,11 +242,21 @@ internal sealed class ApiExtractor
         Timeout = _options.BuildTimeout,
     };
 
+    /// <summary>The tool version's sub-folder of a shared cargo target folder
+    /// (<paramref name="folderName"/> below <see cref="CrateBuilderOptions.CargoTargetDirectory"/>,
+    /// then the tool's hash), or <c>null</c> when no shared folder is set.</summary>
+    internal static string SharedToolTargetDirectory(CrateBuilderOptions options, string folderName)
+    {
+        var folder = SharedCargoTarget.For(options, folderName);
+        return folder == null ? null : Path.Combine(folder, ApiExtractorToolSource.ContentHash.Substring(0, ApiExtractorToolSource.FolderHashLength));
+    }
+
     private static string ExecutableName => OperatingSystem.IsWindows() ? ApiExtractorToolSource.ToolName + ".exe" : ApiExtractorToolSource.ToolName;
 
     private async Task<string> BuildOnHostAsync(string toolDirectory, CrateBuildRequest request, CrateBuilderContext context, CancellationToken ct)
     {
-        var expected = Path.Combine(toolDirectory, "target", "release", ExecutableName);
+        var shared = SharedToolTargetDirectory(context.Options, SharedCargoTarget.ExtractorHostFolderName);
+        var expected = Path.Combine(shared ?? Path.Combine(toolDirectory, "target"), "release", ExecutableName);
         var marker = Path.Combine(toolDirectory, "host-build.ok");
         var gate = BuildLocks.GetOrAdd(toolDirectory, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
@@ -255,7 +270,9 @@ internal sealed class ApiExtractor
             context.Report(CrateBuildStage.ExtractingApi, "Building the API extractor tool with the installed Rust toolchain (first use only)");
             var workbench = context.RustWorkbench;
             var project = workbench.OpenProject(Path.Combine(toolDirectory, "Cargo.toml"));
-            var result = await workbench.BuildAsync(project, ToolBuildOptions(request), null, ct).ConfigureAwait(false);
+            var options = ToolBuildOptions(request);
+            SharedCargoTarget.ApplyHost(options, shared);
+            var result = await workbench.BuildAsync(project, options, null, ct).ConfigureAwait(false);
             if (!result.Success)
             {
                 throw new FacadeGenerationException("The API extractor tool did not build: " + Describe(result), CrateBuildStage.ExtractingApi);
@@ -291,6 +308,14 @@ internal sealed class ApiExtractor
             }
 
             context.Report(CrateBuildStage.ExtractingApi, "Building the API extractor tool in a Docker container (first use only)");
+            var shared = SharedToolTargetDirectory(context.Options, SharedCargoTarget.ExtractorDockerFolderName);
+            if (shared != null)
+            {
+                var built = await BuildInContainerWithSharedTargetAsync(toolDirectory, outputDirectory, shared, request, context, ct).ConfigureAwait(false);
+                File.WriteAllText(marker, built + "\n");
+                return built;
+            }
+
             var buildRequest = new ContainerBuildRequest
             {
                 ProjectDirectory = toolDirectory,
@@ -325,6 +350,59 @@ internal sealed class ApiExtractor
         finally
         {
             gate.Release();
+        }
+    }
+
+    /// <summary>The container build of the tool for the host when a shared cargo target folder
+    /// is set: one container with <paramref name="sharedTarget"/> bind-mounted as cargo's target
+    /// folder, the executable retrieved into <paramref name="outputDirectory"/>, then the files
+    /// handed back to the folder's owner and the container removed.</summary>
+    private async Task<string> BuildInContainerWithSharedTargetAsync(string toolDirectory, string outputDirectory, string sharedTarget, CrateBuildRequest request, CrateBuilderContext context, CancellationToken ct)
+    {
+        var workbench = context.DockerWorkbench;
+        var image = await workbench.EnsureImageAsync(null, null, ct).ConfigureAwait(false);
+        var container = await workbench.StartContainerAsync(image, SharedCargoTarget.Mount(new BuildContainerOptions { KeepOnDispose = false }, sharedTarget), ct).ConfigureAwait(false);
+        try
+        {
+            await workbench.CopySourceAsync(container, toolDirectory, new[] { "docker-*" }, null, ct).ConfigureAwait(false);
+            var options = ToolBuildOptions(request);
+            SharedCargoTarget.ApplyContainer(options, sharedTarget);
+            var build = await workbench.RunCargoAsync(container, CargoCommand.Build, options, CrossTarget.LinuxNative, null, ct).ConfigureAwait(false);
+            if (!build.Success)
+            {
+                throw new FacadeGenerationException("The API extractor tool did not build in the container: " + Describe(build), CrateBuildStage.ExtractingApi);
+            }
+
+            var retrieval = await workbench.RetrieveArtifactsAsync(
+                container,
+                build.Artifacts,
+                new ArtifactRetrievalOptions
+                {
+                    HostDirectory = outputDirectory,
+                    Layout = ArtifactLayout.Flat,
+                    IncludeExecutables = true,
+                    IncludeSharedLibraries = false,
+                    Overwrite = true,
+                },
+                CrossTarget.LinuxNative,
+                ct).ConfigureAwait(false);
+            var executable = retrieval?.Artifacts.FirstOrDefault(a => a.Kind == ArtifactKind.Executable && a.TargetName == ApiExtractorToolSource.ToolName)?.HostPath;
+            if (executable == null || !File.Exists(executable))
+            {
+                throw new FacadeGenerationException("The API extractor tool built in the container, but its executable was not retrieved.", CrateBuildStage.ExtractingApi);
+            }
+
+            return executable;
+        }
+        finally
+        {
+            var ownership = await SharedCargoTarget.RestoreOwnershipAsync(workbench, container, sharedTarget).ConfigureAwait(false);
+            if (ownership != null)
+            {
+                context.Warnings.Add(ownership);
+            }
+
+            await container.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -363,11 +441,14 @@ internal sealed class ApiExtractor
         context.Report(CrateBuildStage.ExtractingApi, "Preparing a Docker container for the API extractor tool");
         var image = await workbench.EnsureImageAsync(null, null, ct).ConfigureAwait(false);
         var hash = ApiExtractorToolSource.ContentHash.Substring(0, ApiExtractorToolSource.FolderHashLength);
-        var containerOptions = new BuildContainerOptions
-        {
-            KeepOnDispose = false,
-            TargetVolumeName = workbench.Options.ContainerNamePrefix + "-api-extractor-" + hash,
-        };
+        var shared = SharedToolTargetDirectory(context.Options, SharedCargoTarget.ExtractorDockerFolderName);
+        var containerOptions = SharedCargoTarget.Mount(
+            new BuildContainerOptions
+            {
+                KeepOnDispose = false,
+                TargetVolumeName = workbench.Options.ContainerNamePrefix + "-api-extractor-" + hash,
+            },
+            shared);
         var container = await workbench.StartContainerAsync(image, containerOptions, ct).ConfigureAwait(false);
         var removed = false;
         try
@@ -378,6 +459,7 @@ internal sealed class ApiExtractor
             context.Report(CrateBuildStage.ExtractingApi, "Building the API extractor tool in the container (reused while the target volume exists)");
             var toolOptions = ToolBuildOptions(request);
             toolOptions.WorkingDirectory = ToolContainerFolder;
+            SharedCargoTarget.ApplyContainer(toolOptions, shared);
             var build = await workbench.RunCargoAsync(container, CargoCommand.Build, toolOptions, CrossTarget.LinuxNative, null, ct).ConfigureAwait(false);
             if (!build.Success)
             {
@@ -385,7 +467,7 @@ internal sealed class ApiExtractor
             }
 
             var executable = build.Artifacts.FirstOrDefault(a => a.Executable != null && a.TargetName == ApiExtractorToolSource.ToolName)?.Executable
-                ?? BuildContainer.TargetPath + "/release/" + ApiExtractorToolSource.ToolName;
+                ?? (shared != null ? SharedCargoTarget.ContainerPath : BuildContainer.TargetPath) + "/release/" + ApiExtractorToolSource.ToolName;
 
             context.Report(CrateBuildStage.ExtractingApi, "Copying the staged crate into the container");
             await workbench.CopySourceIntoAsync(container, stagingRoot, CrateContainerFolder, null, null, ct).ConfigureAwait(false);
@@ -403,6 +485,7 @@ internal sealed class ApiExtractor
             }
 
             File.WriteAllText(outputPath, json, new UTF8Encoding(false));
+            await RestoreSharedOwnershipAsync(workbench, container, shared, context).ConfigureAwait(false);
             await container.StopAndRemoveAsync(removeTargetVolume: false, ct).ConfigureAwait(false);
             removed = true;
         }
@@ -410,8 +493,18 @@ internal sealed class ApiExtractor
         {
             if (!removed)
             {
+                await RestoreSharedOwnershipAsync(workbench, container, shared, context).ConfigureAwait(false);
                 await container.DisposeAsync().ConfigureAwait(false);
             }
+        }
+    }
+
+    private static async Task RestoreSharedOwnershipAsync(DockerRustWorkbench workbench, BuildContainer container, string shared, CrateBuilderContext context)
+    {
+        var ownership = await SharedCargoTarget.RestoreOwnershipAsync(workbench, container, shared).ConfigureAwait(false);
+        if (ownership != null)
+        {
+            context.Warnings.Add(ownership);
         }
     }
 

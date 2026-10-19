@@ -84,6 +84,12 @@ internal static class WrapReportWriter
         var typeCount = plan.Handles.Count + plan.Mirrors.Count + plan.Enums.Count;
         Line(sb, Indent + "Wrapped types:     " + Count(typeCount) + $" ({Count(plan.Handles.Count)} {Plural(plan.Handles.Count, "object", "objects")} to dispose, {Count(plan.Mirrors.Count)} value {Plural(plan.Mirrors.Count, "type", "types")}, {Count(plan.Enums.Count)} {Plural(plan.Enums.Count, "enum", "enums")})");
         Line(sb, Indent + "Wrapped functions: " + Count(userFunctions.Count));
+        if (plan.FieldAccessorsOmitted.HasValue)
+        {
+            var omitted = plan.FieldAccessorsOmitted.Value;
+            Line(sb, Indent + "Field accessors:   off - " + Count(omitted) + " " + Plural(omitted, "getter or setter", "getters and setters")
+                + " of objects' public fields not generated, because WrapperOptions.GenerateFieldAccessors is false");
+        }
         if (plan.Constants.Count > 0)
         {
             Line(sb, Indent + "Constants:         " + Count(plan.Constants.Count) + " (copied into " + libClass + " as C# const values)");

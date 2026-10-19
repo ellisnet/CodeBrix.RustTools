@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CodeBrix.RustTools.CrateBuilder.Building.ManyLinux;
 using CodeBrix.RustTools.CrateBuilder.Building.Verification;
 using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
 using SilverAssertions;
@@ -108,7 +109,7 @@ public class DefaultArtifactVerifierTests : IClassFixture<NativeBinariesFixture>
 
         //Assert
         ok.Should().BeTrue();
-        notes.Should().ContainSingle(n => n.Contains("within the baseline"));
+        notes.Should().ContainSingle(n => n.Contains("within the linux-x64 baseline's 99.0"));
     }
 
     [Fact]
@@ -119,7 +120,7 @@ public class DefaultArtifactVerifierTests : IClassFixture<NativeBinariesFixture>
 
         //Assert
         ok.Should().BeFalse();
-        notes.Should().ContainSingle(n => n.Contains("newer than the baseline's 2.0"));
+        notes.Should().ContainSingle(n => n.Contains("newer than the linux-x64 baseline's 2.0"));
     }
 
     private sealed class RejectingVerifier : IArtifactVerifier
@@ -195,5 +196,35 @@ public class DefaultArtifactVerifierTests : IClassFixture<NativeBinariesFixture>
         //Assert
         good.Outcome.Should().Be(CrateTargetOutcome.Compiled);
         bad.Outcome.Should().Be(CrateTargetOutcome.Failed);
+    }
+
+    [Theory]
+    [InlineData("linux-x64", CrateTarget.LinuxX64, "2.28")]
+    [InlineData("linux-arm64", CrateTarget.LinuxArm64, "2.28")]
+    [InlineData("linux-riscv64", CrateTarget.LinuxRiscV64, "2.39")]
+    public void GlibcFloorVerifier_checks_each_target_against_its_own_manylinux_floor(string rid, CrateTarget target, string floor)
+    {
+        //Arrange
+        var verifier = new GlibcFloorVerifier(ManyLinuxImages.GlibcFloor);
+
+        //Act
+        var notes = verifier.Verify(PathOf(rid), target, Cdylib(), out var ok);
+
+        //Assert
+        ok.Should().BeTrue(string.Join(" | ", notes));
+        verifier.FloorFor(target).Should().Be(System.Version.Parse(floor));
+        verifier.Floor.Should().BeNull();
+        notes.Should().ContainSingle(n => n.Contains($"within the {rid} baseline's {floor}"));
+    }
+
+    [Fact]
+    public void GlibcFloorVerifier_rejects_a_riscv64_library_above_a_lower_floor_than_its_own()
+    {
+        //Act (the riscv64 binary needs glibc 2.34: inside its own 2.39 floor, above the 2.28 of the other two)
+        var notes = new GlibcFloorVerifier(_ => "2.28").Verify(PathOf("linux-riscv64"), CrateTarget.LinuxRiscV64, Cdylib(), out var ok);
+
+        //Assert
+        ok.Should().BeFalse();
+        notes.Should().ContainSingle(n => n.Contains("newer than the linux-riscv64 baseline's 2.28"));
     }
 }

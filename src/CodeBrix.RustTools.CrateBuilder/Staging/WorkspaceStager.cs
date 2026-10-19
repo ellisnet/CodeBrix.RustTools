@@ -185,6 +185,7 @@ internal sealed class WorkspaceStager : IWorkspaceStager
             Commit = identity.Commit,
             Branch = identity.Branch,
             Tag = identity.Tag,
+            CloneReused = identity.CloneReused,
             ManifestPath = identity.ManifestPath,
             LocalManifestPath = identity.LocalManifestPath,
             SourceHash = identity.SourceHash,

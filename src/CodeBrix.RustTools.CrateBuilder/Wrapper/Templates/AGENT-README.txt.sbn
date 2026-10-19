@@ -110,9 +110,20 @@ DO NOT share one object between threads expecting parallel speed. The native
 object is not thread-safe; the wrapper serialises calls on one instance with a
 lock.
 
+{{~ if model.has_field_accessors ~}}
 DO NOT expect a copy to write through. Get<Field>() getters, and methods whose
 Rust function returns a reference, return a COPY (their XML docs say so):
 changing the copy does not change the object it came from.
+{{~ else ~}}
+DO NOT expect a copy to write through. Methods whose Rust function returns a
+reference return a COPY (their XML docs say so): changing the copy does not
+change the object it came from.
+
+DO NOT look for Get<Field>() / Set<Field>(value) methods on the objects: the
+getters and setters of public fields were turned off when this wrapper was
+generated (WRAP-REPORT.txt says how many were left out). Only the members
+listed in this file exist.
+{{~ end ~}}
 {{~ end ~}}
 {{~ if !model.is_pass_through ~}}
 

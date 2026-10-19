@@ -54,4 +54,18 @@ public class BuildContainerOptionsTests
         //Assert
         copy.NetworkDisabled.Should().BeTrue();
     }
+
+    [Fact]
+    public void Platform_defaults_to_null_and_Clone_copies_it()
+    {
+        //Arrange
+        var options = new BuildContainerOptions { Platform = "linux/riscv64" };
+
+        //Act
+        var copy = options.Clone();
+
+        //Assert
+        new BuildContainerOptions().Platform.Should().BeNull();
+        copy.Platform.Should().Be("linux/riscv64");
+    }
 }

@@ -181,6 +181,13 @@ CrateBuilderOptions (sealed class)
                                                 copies include/ into an app),
                                                 then (libraries only) your
                                                 app's own runtimes/ folder
+  string CargoTargetDirectory                   null = each run builds in its own
+                                                folder under the scratch root; set =
+                                                one cargo target folder shared by
+                                                every build (see SHARED CARGO TARGET
+                                                FOLDER):
+                                                new CrateBuilderOptions {
+                                                  CargoTargetDirectory = "/work/cargo-target" }
   string EffectiveScratchRootDirectory { get; }
   const string DefaultScratchFolderName
 
@@ -228,6 +235,12 @@ WrapperOptions (sealed class)
   string OutputDirectory                null = sibling "<AssemblyName>" of
                                         the request's OutputDirectory
   bool GenerateSmokeTests = false
+  bool GenerateFieldAccessors = true    false = no Get<Field>() / Set<Field>(value)
+                                        for objects' public fields (data-heavy
+                                        crates); the constructor from the fields,
+                                        Variant() and the per-variant constructors
+                                        stay: new WrapperOptions { AssemblyName = "A",
+                                        RootNamespace = "A", GenerateFieldAccessors = false }
   void Validate()
 WrapperPackaging (sealed class)
   string PackageId                      REQUIRED (NuGet id characters)
@@ -291,7 +304,10 @@ CrateReadinessReport multi-line, the others one line)
   BuildReadinessIssue: string Code, Message; bool IsBlocking; CrateTarget?
     Target
   CrateSourceIdentity: string Kind ("local" | "git"), Url, Commit, Branch,
-    Tag, ManifestPath, LocalManifestPath, SourceHash, CrateName,
+    Tag; bool CloneReused (git: the CloneDirectory already held a clone of
+    the same remote, which was fetched instead of cloned; false for a fresh
+    clone and for a local source - if (result.Source.CloneReused) ...);
+    string ManifestPath, LocalManifestPath, SourceHash, CrateName,
     CrateVersion; IReadOnlyList<string> CrateTypes; const LocalKind, GitKind
   CrateTargetResult: CrateTarget Target; string Rid, Triple;
     CrateTargetOutcome Outcome; IReadOnlyList<string> ArtifactPaths;
@@ -322,7 +338,10 @@ BuildRecord (sealed class) - crate-build-record.json in OutputDirectory
   static BuildRecord Load(string path); void Save(string path);
   string ToJson()
   JSON: indented, camelCase, enums as strings, nulls omitted, UTF-8 without
-  BOM, "\n" line endings.
+  BOM, "\n" line endings. "source" holds the CrateSourceIdentity: kind, url,
+  commit, branch, tag, cloneReused (always written, true or false),
+  manifestPath, localManifestPath, sourceHash, crateName, crateVersion,
+  crateTypes.
   TargetRecord: string Rid, Triple; CrateTargetOutcome Outcome;
     ArtifactProvenance Provenance; IList<ArtifactRecord> Artifacts; string
     Message
@@ -422,7 +441,8 @@ RecurseSubmodules for submodules).
     checked out again instead of cloned. With no Commit / Branch / Tag a
     reused clone is checked out DETACHED at the remote default branch's tip.
     Checkouts are safe: local changes a checkout would overwrite fail the
-    stage instead of being discarded.
+    stage instead of being discarded. CrateBuildResult.Source.CloneReused
+    (and "cloneReused" in the record) says whether the clone was reused.
   - Any OTHER non-empty folder (not a repository, a bare one, a clone of
     another remote) is a ResolvingSource failure, and the folder is left
     untouched.
@@ -464,16 +484,41 @@ target: the host's own triple natively, other Linux triples with the GNU
 cross gcc, Android with the NDK (API 24, or 33 when LinkToCodeBrixWebGpu),
 macOS through the macOS link profile on a machine that is not a Mac (a
 DevelopmentBuild), Windows through llvm-mingw (gnullvm).
-Docker mode builds every target in ONE build container (the whole staging
-root is copied to /work, cargo runs per target in the built crate's folder
-below it, each target with its own contribution variables; extra rustflags
-extend the Docker package's per-target flags). Android is linked at the
-same API level as in host mode (24, or 33 when LinkToCodeBrixWebGpu). LinuxBaseline.RustImage (default) = the official rust image plus
-the Docker package's cross layers, every target. LinuxBaseline.ManyLinux =
-CrateBuilder's manylinux image (the old glibc of the manylinux standard as
-the floor, checked on the result): linux-x64 only, on an x86-64 engine; the
-other targets are NotBuildableInThisMode (the readiness check already says
-so).
+Docker mode copies the whole staging root to /work of a build container and
+runs cargo per target in the built crate's folder below it, each target
+with its own contribution variables (extra rustflags extend the Docker
+package's per-target flags). Android is linked at the same API level as in
+host mode (24, or 33 when LinkToCodeBrixWebGpu).
+  LinuxBaseline.RustImage (default) = the official rust image plus the
+  Docker package's cross layers, every target, all in ONE container.
+  LinuxBaseline.ManyLinux = CrateBuilder's manylinux images, one per Linux
+  architecture, ONE image and ONE container per platform; the other six
+  targets are NotBuildableInThisMode (the readiness check already says so).
+  Each library is checked against the glibc floor of its own image:
+      linux-x64      manylinux_2_28_x86_64    glibc 2.28   linux/amd64
+      linux-arm64    manylinux_2_28_aarch64   glibc 2.28   linux/arm64
+      linux-riscv64  manylinux_2_39_riscv64   glibc 2.39   linux/riscv64
+  (quay.io/pypa publishes no older manylinux baseline for riscv64; every
+  riscv64 distribution in use is newer than 2.39.) The images are
+  digest-pinned and install the pinned Rust with a checksum-verified
+  rustup-init.
+  PREREQUISITE FOR THE FOREIGN ARCHITECTURES: an image of another
+  architecture than the engine's own (linux-arm64 and linux-riscv64 on an
+  x86-64 engine) is built and run under qemu-user EMULATION, which needs a
+  qemu-user binfmt handler for that architecture on the engine's host
+  (/proc/sys/fs/binfmt_misc/qemu-aarch64, /proc/sys/fs/binfmt_misc/
+  qemu-riscv64; on Debian `sudo apt install qemu-user-static
+  binfmt-support`; Docker Desktop brings its own). The build probes each
+  such platform once (CodeBrix.RustTools.Docker's ProbePlatformAsync)
+  before it builds; when the probe fails the target is
+  NotBuildableInThisMode with a message that names the missing qemu-user
+  binfmt handler, what the probe found and the guidance text. Nothing is
+  installed for you.
+  SLOW: everything in an emulated image runs under qemu-user - the image
+  build (rustup and the toolchain) and every cargo build. Expect minutes
+  where a native build takes seconds, more for crates with many
+  dependencies; RISC-V is slower than ARM64. Built images are reused by
+  later builds (until they are removed).
 Rules for a GENERATED facade crate: the request's Features /
 NoDefaultFeatures / AllFeatures are written into the facade's dependency on
 your crate (the facade itself has none), and --locked is never passed (the
@@ -483,6 +528,44 @@ Locked and the features are passed to cargo as given.
 Only THE crate's dynamic library is collected (not dependencies, build
 scripts or proc-macros). The licence gate (LicensePolicy) runs in Enforce
 mode and reports a violation as a failed target.
+
+SHARED CARGO TARGET FOLDER (CrateBuilderOptions.CargoTargetDirectory)
+---------------------------------------------------------------------
+By default every run builds in its own target folder inside the run's
+staged copy, deleted with the run, so each build compiles the crate's
+dependencies again. Set CargoTargetDirectory to one folder and every cargo
+run of the builder uses a sub-folder of it as cargo's target folder
+(through CARGO_TARGET_DIR, which wins over a CARGO_TARGET_DIR of your own
+and over build.target-dir in a cargo configuration file):
+    <folder>/host/                     host mode: the crate and a generated
+                                       facade (shared, so the facade build
+                                       reuses the crate's dependency builds)
+    <folder>/docker/                   Docker mode in the rust image: the
+                                       same, bind-mounted into the build
+                                       container
+    <folder>/docker/manylinux-<arch>/  Docker mode with LinuxBaseline.
+                                       ManyLinux, one per image (x86_64,
+                                       aarch64, riscv64): each image builds
+                                       its own architecture natively into
+                                       release/, so cargo's triple folders
+                                       cannot keep them apart
+    <folder>/api-extractor/<hash>/     the API extractor tool, host build
+    <folder>/api-extractor-docker/<hash>/  the tool built in a container
+Host and Docker builds never share a folder (another toolchain, other
+paths and another C library: a build script built for one must not be run
+by the other). Each build's native file is copied to OutputDirectory as
+soon as cargo finishes, so a later build replacing it in the shared folder
+does no harm. Several builders (or processes) may share the folder: cargo
+locks it while it builds. CrateBuilder creates the folder when needed and
+never deletes it.
+Docker mode: the docker/ (docker/manylinux-<arch>/, api-extractor-docker/) folder is BIND-MOUNTED
+at /codebrix-cargo-target in the container, so the folder must be on the
+machine the Docker engine runs on (not with a remote tcp:// or ssh://
+engine) and shared with the engine (Docker Desktop file sharing). A Linux
+engine writes the files as root; after the container's last cargo run they
+are given the owner and group of the mounted folder (the user who created
+it), so you can delete them. If that fails, the result has a warning
+naming the folder.
 
 
 WRAPPLAN (what the wrapper covers)
@@ -542,6 +625,13 @@ only copies or converts, so it never changes what the Rust code means):
     constructor from its fields (the C# constructor, or the static
     FromFields when the crate has its own `new`). A struct with neither
     methods nor such a way to make one is still listed as not wrapped.
+    WrapperOptions.GenerateFieldAccessors = false leaves out the getters
+    and setters (only them: the constructor from the fields stays, and so
+    do Variant() and the variant constructors below); an object that only
+    its accessors made useful is then listed as not wrapped, the SUMMARY of
+    WRAP-REPORT.txt says how many accessors were left out ("Field
+    accessors: off - N ...", "fieldAccessorsOmitted" in WRAP-REPORT.json)
+    and the wrapper's AGENT-README.txt says they are not there.
   - Results that borrow (&T, &str, &[T], Option<&T>, from self, from the
     arguments or 'static) are returned as an owned COPY: values and
     strings always, objects only when their type is Clone. A mutable
@@ -795,8 +885,11 @@ Docker mode (the Docker workbench's engine check):
   - Android targets need an x86-64 engine.
   - Any target that needs a derived image (everything except the engine's
     own Linux architecture on the rust image) needs the docker CLI.
-  - LinuxBaseline.ManyLinux: linux-x64 only, on an x86-64 engine
-    (docker.manylinux-limit for the others).
+  - LinuxBaseline.ManyLinux: the three Linux targets (docker.manylinux-limit
+    for the others). A Linux target whose manylinux image is not the
+    engine's own architecture gets the WARNING docker.manylinux-emulated
+    (qemu-user emulation, its binfmt prerequisite, the slowness); the
+    readiness check does not run the platform probe - the build does.
   - Otherwise every target is buildable: the Docker package supplies the
     cross layers.
 When no requested target is buildable, the report is not ready
@@ -806,7 +899,8 @@ ReadinessIssueKind in kebab case, e.g. target.target-missing,
 target.linux-cross-tool-missing, target.android-ndk-missing),
 macos.link-profile-unavailable, windows.llvm-mingw-missing,
 docker.engine-unavailable, docker.android-needs-x64-engine,
-docker.manylinux-limit, docker.cli-missing, targets.none-buildable.
+docker.manylinux-limit, docker.manylinux-emulated (warning),
+docker.cli-missing, targets.none-buildable.
 
 
 TARGETS: WHAT EACH ONE NEEDS
@@ -819,16 +913,21 @@ items, with install guidance; nothing is installed for you.
 
   linux-x64      Host: on an x86-64 Linux host nothing more; elsewhere std
                  + the GNU cross gcc (x86_64-linux-gnu-gcc).
-                 Docker: nothing more on an x86-64 engine (ManyLinux too);
-                 else a derived image (docker CLI).
+                 Docker: nothing more on an x86-64 engine (ManyLinux too:
+                 glibc 2.28); else a derived image (docker CLI), and for
+                 ManyLinux the qemu-user emulation of linux/amd64.
   linux-arm64    Host: on an ARM64 Linux host nothing more; elsewhere std
                  + aarch64-linux-gnu-gcc and its ar on PATH (Debian:
                  gcc-aarch64-linux-gnu).
                  Docker: a derived image (docker CLI) unless the engine is
-                 ARM64. Not with ManyLinux.
+                 ARM64. ManyLinux (glibc 2.28): the docker CLI and, on an
+                 engine that is not ARM64, the qemu-user binfmt handler for
+                 aarch64 (emulated, slow).
   linux-riscv64  Host: on a RISC-V 64 Linux host nothing more; elsewhere
                  std + riscv64-linux-gnu-gcc (Debian: gcc-riscv64-linux-gnu).
-                 Docker: a derived image (docker CLI). Not with ManyLinux.
+                 Docker: a derived image (docker CLI). ManyLinux (glibc
+                 2.39): the docker CLI and the qemu-user binfmt handler for
+                 riscv64 (emulated, slower still).
   android-x64,   Host: std + an Android NDK (ANDROID_NDK_HOME or
   android-arm64  ANDROID_HOME); linked at API 24, or 33 when WebGPU-linked.
                  Docker: an x86-64 engine and the docker CLI (the derived
@@ -859,8 +958,10 @@ HOST OR DOCKER
   reproducible images (official rust image + the Docker package's cross
   layers); the first build of each derived image takes minutes, later ones
   come from the engine's cache. LinuxBaseline.ManyLinux (Docker only)
-  builds linux-x64 against the old glibc floor of the manylinux standard,
-  for Linux files that must load on old distributions.
+  builds the three Linux targets against the old glibc floors of the
+  manylinux standard (2.28; 2.39 for riscv64), for Linux files that must
+  load on old distributions - the foreign architectures under qemu-user
+  emulation (prerequisite and slowness above).
   Both modes give the same triples, file names, layout, record and wrapper.
 
 
@@ -1011,11 +1112,23 @@ COMMON PITFALLS TO AVOID
   app's minSdk at least that high.
 - Do not put KeepScratch on for every build: run folders are not reused and
   hold a full copy of the crate. The API extractor's build is cached under
-  <scratch>/api-extractor/ and reused by every build.
+  <scratch>/api-extractor/ and reused by every build. To reuse the crate's
+  compiled dependencies between builds, set CargoTargetDirectory instead.
 - A cdylib built without a Wrapper is built as it is first; only when it
   exports nothing does FacadeMode.Auto build a facade (a second pass in the
   same run, with a warning). Set FacadeMode.Always to skip the first build,
   or Never to keep the crate exactly as it is.
+- LinuxBaseline.ManyLinux for linux-arm64 / linux-riscv64 on an x86-64
+  engine runs everything under qemu-user emulation: register the engine
+  host's qemu-user binfmt handlers first (the target is otherwise
+  NotBuildableInThisMode with the guidance in its message), and budget
+  minutes per build - a crate with many dependencies takes much longer
+  than the small samples. For linux-arm64 / linux-riscv64 files that may
+  need a newer glibc, LinuxBaseline.RustImage cross-compiles them natively
+  and fast.
+- The riscv64 manylinux floor is glibc 2.39, not 2.28: there is no older
+  manylinux baseline for riscv64. Read each target's floor in its
+  verification notes.
 
 
 WHAT THIS PACKAGE DOES NOT DO
@@ -1037,7 +1150,9 @@ WHAT THIS PACKAGE DOES NOT DO
   enum is an object instead, see tier 1); a type
   from another crate cannot be looked into (only this crate's source is
   read); a mutable reference result exists to be changed in place.
-- Build ManyLinux images for arm64 / riscv64 (no foreign-platform images).
+- Set up emulation: the ManyLinux images of linux-arm64 / linux-riscv64 on
+  an x86-64 engine need the engine host's qemu-user binfmt handlers, which
+  CrateBuilder only probes for and explains.
 
 
 WORKING EXAMPLES ON GITHUB
@@ -1070,6 +1185,14 @@ https://github.com/ellisnet/CodeBrix.RustTools/tree/main/
                                    Staging/ManifestPathRewriterTests.cs
   Build drivers .................. Building/HostBuildDriverTests.cs,
                                    Building/DockerBuildDriverTests.cs
+  ManyLinux (three images, glibc
+    floors, linux-arm64 and
+    linux-riscv64 under qemu) .... Building/ManyLinux/ManyLinuxImagesTests.cs,
+                                   Building/TargetMatrixTests.cs,
+                                   EndToEnd/DockerEndToEndTests.cs
+  Shared cargo target folder ..... Building/SharedCargoTargetTests.cs,
+                                   EndToEnd/HostEndToEndTests.cs,
+                                   EndToEnd/DockerEndToEndTests.cs
   Verification ................... Building/Verification/
                                    DefaultArtifactVerifierTests.cs,
                                    NativeArtifactReaderTests.cs
@@ -1107,6 +1230,9 @@ QUICK REFERENCE CARD
   Wrap report       res.WrapReportPath (WRAP-REPORT.txt)
   Select / rename   Wrapper.Plan = new WrapPlan { IncludeTypes = { "X" } }
   WebGPU crate      LinkToCodeBrixWebGpu = true
+  Reuse deps        new CrateBuilderOptions { CargoTargetDirectory = dir }
+  No field getters  Wrapper.GenerateFieldAccessors = false
+  Clone reused?     res.Source.CloneReused
 
 Target: .NET 10 or later
 License: MIT

@@ -197,4 +197,18 @@ public class ContainerBuildRequestTests
         copy.AndroidApiLevel.Should().Be(33);
         request.TargetEnvironment[CrossTarget.LinuxNative]["X"].Should().Be("1");
     }
+
+    [Fact]
+    public void Validate_rejects_a_platform_list_in_the_image_spec_or_the_container_options()
+    {
+        //Arrange
+        var image = () => new ContainerBuildRequest { ProjectDirectory = "/src/app", ImageSpec = new BuildImageSpec { Platform = "linux/amd64,linux/arm64" } }.Validate();
+        var container = () => new ContainerBuildRequest { ProjectDirectory = "/src/app", ContainerOptions = new BuildContainerOptions { Platform = "linux/amd64,linux/arm64" } }.Validate();
+        var single = () => new ContainerBuildRequest { ProjectDirectory = "/src/app", ImageSpec = new BuildImageSpec { Platform = "linux/arm64" }, ContainerOptions = new BuildContainerOptions { Platform = "linux/arm64" } }.Validate();
+
+        //Assert
+        image.Should().Throw<ArgumentException>();
+        container.Should().Throw<ArgumentException>();
+        single.Should().NotThrow();
+    }
 }

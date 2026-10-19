@@ -28,4 +28,11 @@ public enum DockerGuidanceTopic
 
     /// <summary>Make the <c>docker</c> command-line tool available on PATH.</summary>
     InstallDockerCli,
+
+    /// <summary>Let the engine run images of another architecture (for example
+    /// <c>linux/arm64</c> or <c>linux/riscv64</c> on an x86-64 engine): register qemu-user binfmt
+    /// handlers on a Linux engine host (Docker Desktop brings its own emulation). Returned by
+    /// <see cref="DockerRustWorkbench.ProbePlatformAsync"/> when a foreign platform's program
+    /// cannot execute.</summary>
+    EnableForeignPlatforms,
 }

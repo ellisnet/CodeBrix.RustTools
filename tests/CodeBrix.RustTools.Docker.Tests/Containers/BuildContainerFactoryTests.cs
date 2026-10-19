@@ -198,4 +198,59 @@ public class BuildContainerFactoryTests
         BuildContainerFactory.ResolveTargetVolume(new BuildContainerOptions(), "box").Should().Be("box-target");
         BuildContainerFactory.ResolveTargetVolume(new BuildContainerOptions { TargetVolumeName = "shared-target" }, "box").Should().Be("shared-target");
     }
+
+    [Fact]
+    public void BuildSpec_leaves_the_platform_to_the_engine_by_default()
+        => BuildContainerFactory.BuildSpec(Image, new BuildContainerOptions(), Labels, "cache", "box", "box-target", "key1").Platform.Should().BeNull();
+
+    [Fact]
+    public void BuildSpec_uses_the_image_s_platform_unless_the_options_name_one()
+    {
+        //Arrange
+        var arm64Image = new RustBuildImage { ImageName = "rust", Tag = "latest", ImageId = "sha256:0123456789abcdef", Platform = "linux/arm64" };
+
+        //Act
+        var fromImage = BuildContainerFactory.BuildSpec(arm64Image, new BuildContainerOptions(), Labels, "cache", "box", "box-target", "key1");
+        var fromOptions = BuildContainerFactory.BuildSpec(arm64Image, new BuildContainerOptions { Platform = "Linux/RISCV64" }, Labels, "cache", "box", "box-target", "key1");
+        var plainImage = BuildContainerFactory.BuildSpec(Image, new BuildContainerOptions { Platform = "linux/arm64" }, Labels, "cache", "box", "box-target", "key1");
+
+        //Assert
+        fromImage.Platform.Should().Be("linux/arm64");
+        fromOptions.Platform.Should().Be("linux/riscv64");
+        plainImage.Platform.Should().Be("linux/arm64");
+    }
+
+    [Fact]
+    public void BuildSpec_rejects_a_platform_list()
+        => ((Action)(() => BuildContainerFactory.BuildSpec(Image, new BuildContainerOptions { Platform = "linux/amd64,linux/arm64" }, Labels, "cache", "box", "box-target", "key1")))
+            .Should().Throw<ArgumentException>();
+
+    [Fact]
+    public void ComputeReuseKey_is_unchanged_without_a_platform_and_never_matches_another_platform()
+    {
+        //Arrange
+        var arm64Image = new RustBuildImage { ImageName = Image.ImageName, Tag = Image.Tag, ImageId = Image.ImageId, SpecHash = Image.SpecHash, Platform = "linux/arm64" };
+
+        //Act
+        var plain = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions(), "cache");
+        var blank = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions { Platform = " " }, "cache");
+        var arm64 = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions { Platform = "linux/arm64" }, "cache");
+        var arm64FromImage = BuildContainerFactory.ComputeReuseKey(arm64Image, new BuildContainerOptions(), "cache");
+        var riscv64 = BuildContainerFactory.ComputeReuseKey(Image, new BuildContainerOptions { Platform = "linux/riscv64" }, "cache");
+
+        //Assert
+        blank.Should().Be(plain);
+        arm64.Should().NotBe(plain);
+        riscv64.Should().NotBe(arm64);
+        arm64FromImage.Should().Be(arm64, "the image's platform is the container's when the options name none");
+    }
+
+    [Fact]
+    public void PlatformFor_prefers_the_options_then_the_image()
+    {
+        //Assert
+        BuildContainerFactory.PlatformFor(Image, new BuildContainerOptions()).Should().BeNull();
+        BuildContainerFactory.PlatformFor(new RustBuildImage { Platform = "linux/arm64" }, new BuildContainerOptions()).Should().Be("linux/arm64");
+        BuildContainerFactory.PlatformFor(new RustBuildImage { Platform = "linux/arm64" }, new BuildContainerOptions { Platform = "linux/amd64" }).Should().Be("linux/amd64");
+    }
 }

@@ -42,6 +42,7 @@ public class SourceResolverTests
         resolved.Identity.CrateVersion.Should().Be("0.18.2");
         resolved.Identity.CrateTypes.Should().Equal("rlib");
         resolved.Identity.SourceHash.Should().BeNull();
+        resolved.Identity.CloneReused.Should().BeFalse("a local source is never a reused clone");
     }
 
     [Fact]
@@ -135,6 +136,7 @@ public class SourceResolverTests
         resolved.Identity.CrateName.Should().Be("gitfix");
         resolved.Identity.CrateVersion.Should().Be("0.2.0");
         resolved.Identity.CrateTypes.Should().Equal("cdylib");
+        resolved.Identity.CloneReused.Should().BeFalse("a fresh clone");
         using (var clone = new Repository(resolved.RepositoryDirectory))
         {
             clone.Info.IsHeadDetached.Should().BeFalse();
@@ -255,7 +257,7 @@ public class SourceResolverTests
         var (upstream, run) = Upstream(sandbox);
         var cloneDirectory = Path.Combine(sandbox.Directory, "my-clone");
         var first = new GitRepositorySource(upstream.Url, GitTestRepository.ManifestPath) { CloneDirectory = cloneDirectory };
-        await new SourceResolver().ResolveAsync(first, StagingContexts.Create(run), TestContext.Current.CancellationToken);
+        var firstResolved = await new SourceResolver().ResolveAsync(first, StagingContexts.Create(run), TestContext.Current.CancellationToken);
         var marker = Path.Combine(cloneDirectory, "untracked-marker.txt");
         File.WriteAllText(marker, "proves the folder was reused, not re-cloned");
         var commit4 = upstream.AddCommit("0.4.0");
@@ -266,6 +268,8 @@ public class SourceResolverTests
         var resolved = await new SourceResolver().ResolveAsync(second, StagingContexts.Create(run, reports), TestContext.Current.CancellationToken);
 
         //Assert
+        firstResolved.Identity.CloneReused.Should().BeFalse("the first resolve cloned into the empty folder");
+        resolved.Identity.CloneReused.Should().BeTrue("the second resolve fetched into the existing clone");
         resolved.Identity.Commit.Should().Be(commit4);
         resolved.Identity.CrateVersion.Should().Be("0.4.0");
         File.Exists(marker).Should().BeTrue();
@@ -349,6 +353,7 @@ public class SourceResolverTests
         //Assert
         resolved.RepositoryDirectory.Should().Be(cloneDirectory);
         resolved.Identity.Commit.Should().Be(upstream.Commit2);
+        resolved.Identity.CloneReused.Should().BeFalse("an empty folder is cloned into, not reused");
     }
 
     [Fact]

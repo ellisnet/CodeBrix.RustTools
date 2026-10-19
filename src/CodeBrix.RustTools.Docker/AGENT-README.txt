@@ -167,6 +167,13 @@ DockerRustWorkbench - THE ENTRY POINT
         Task<DockerEngineInfo> CheckEngineAsync(CancellationToken ct = default);
         IReadOnlyList<DockerGuidance> GetDockerGuidance(DockerEngineInfo info);
 
+        // --- foreign platforms (see FOREIGN PLATFORMS) -----------------
+        const string PlatformProbeImage = "busybox:latest";
+        Task<PlatformProbeResult> ProbePlatformAsync(string platform,
+            CancellationToken ct = default);          // cached per platform
+        Task<bool> CanRunPlatformAsync(string platform,
+            CancellationToken ct = default);          // ProbePlatformAsync().CanRun
+
         Task<RustBuildImage> EnsureImageAsync(BuildImageSpec spec = null,
             IProgress<string> progress = null, CancellationToken ct = default);
 
@@ -195,7 +202,7 @@ DockerRustWorkbench - THE ENTRY POINT
             CancellationToken ct = default);
         Task<CargoCommandResult> RunCargoAsync(BuildContainer container,
             CargoCommand command, CargoBuildOptions options = null,
-            CrossTarget target = CrossTarget.LinuxX64,
+            CrossTarget target = CrossTarget.LinuxNative,
             IProgress<CargoProgress> progress = null,
             CancellationToken ct = default);
         Task<CargoTestResult> TestAsync(BuildContainer container,
@@ -211,7 +218,7 @@ DockerRustWorkbench - THE ENTRY POINT
         Task<ArtifactRetrievalResult> RetrieveArtifactsAsync(
             BuildContainer container, IEnumerable<BuildArtifact> artifacts,
             ArtifactRetrievalOptions options,
-            CrossTarget target = CrossTarget.LinuxX64,
+            CrossTarget target = CrossTarget.LinuxNative,
             CancellationToken ct = default);
         Task<ArtifactRetrievalResult> RetrieveMacOSUniversalArtifactsAsync(
             BuildContainer container,
@@ -369,6 +376,9 @@ for a Docker-side problem.
                                     // riscv64gc-unknown-linux-gnu / null
         string NativeLinuxRuntimeIdentifier   // linux-x64 / linux-arm64 /
                                               // linux-riscv64 / null
+        string NativePlatform       // linux/amd64 / linux/arm64 /
+                                    // linux/riscv64 / null
+        bool   IsNativePlatform(string platform)  // null counts as native
     }
 
     public enum DockerEngineIssue
@@ -397,6 +407,8 @@ image works without the CLI; only derived-image builds need it.
     {
         InstallDocker, StartDocker, GrantDockerAccess, EnableWsl2Backend,
         SwitchToLinuxContainers, CheckEndpoint, InstallDockerCli,
+        EnableForeignPlatforms,   // qemu-user binfmt handlers (see FOREIGN
+                                  // PLATFORMS); from ProbePlatformAsync only
     }
 
     public static class DockerGuidanceProvider
@@ -423,6 +435,12 @@ What the guidance says, per host:
                 instructions).
   Other Linux   a pointer to https://docs.docker.com/engine/install/,
                 systemctl and usermod as above.
+  Foreign platforms (EnableForeignPlatforms): Debian-based
+                `sudo apt install qemu-user-static binfmt-support`, then
+                `ls /proc/sys/fs/binfmt_misc/`; other Linux a pointer to
+                https://docs.docker.com/build/building/multi-platform/;
+                Windows / macOS: Docker Desktop's own emulation, checked
+                with `docker run --rm --platform linux/arm64 busybox uname -m`.
 For NotReachable the order is install, (Windows: WSL 2,) start, (Linux:
 grant access); each explanation says to skip a step that is already done.
 
@@ -444,6 +462,8 @@ IMAGES (CodeBrix.RustTools.Docker.Images)
                                             // base from it ("bring your own")
         string ContainerfileContext { get; set; }  // null => its folder
         IDictionary<string, string> ContainerfileBuildArgs { get; set; }
+        string Platform { get; set; }       // null => the engine's own;
+                                            // "linux/arm64", ONE value
 
         string BaseImageReference { get; }  // "rust:latest" etc.
         bool   RequiresDerivedImage { get; }
@@ -455,6 +475,9 @@ IMAGES (CodeBrix.RustTools.Docker.Images)
     {
         static string Generate(BuildImageSpec spec);
         static string ComputeSpecHash(string dockerfileText);  // 16 hex digits
+        static string ComputeSpecHash(string dockerfileText,
+                                      string platform);  // the same without a
+                                      // platform; "platform=..." appended with one
         static string DerivedImageReference(BuildImageSpec spec,
             string defaultRepository = "codebrix-rusttools-docker");
         const string AndroidNdkVersion, AndroidNdkUrl, AndroidNdkSha1,
@@ -488,6 +511,8 @@ tag) and CrossTargetNotSupportedException for macOS targets.
     {
         string ImageName, Tag, ImageId; string Reference { get; }
         BuildImageSpec Spec;          // with defaults filled in
+        string Platform;              // BuildImageSpec.Platform, normalized;
+                                      // null = the engine's own
         string Dockerfile, SpecHash, BaseImageReference;
         bool IsBaseImage;             // spec had no layers
         bool WasBasePulled;           // pulled during this call
@@ -671,7 +696,11 @@ AndroidArm64 / AndroidX64: the layer downloads the Android NDK (the LTS
   throw CrossTargetNotSupportedException - naming the engine's
   architecture - when DockerEngineInfo.Architecture is anything else. On
   Docker Desktop for Apple Silicon that would mean an amd64 build image
-  running under emulation, which this library does not set up.
+  running under emulation, which this library does not set up by itself:
+  only an explicit BuildImageSpec.Platform = "linux/amd64" (FOREIGN
+  PLATFORMS) makes the image and the container amd64, and then the check
+  is made against that platform. That combination is not exercised by this
+  package's tests.
   HOW ANDROID BUILDS RUN: RunCargoAsync / BuildAsync run
   `cargo build --target <triple>` directly, with the variables that point
   cargo and C build scripts at the NDK (CC_, CXX_, AR_, RANLIB_<triple> and
@@ -802,6 +831,9 @@ CONTAINERS (CodeBrix.RustTools.Docker.Containers)
         int AndroidApiLevel { get; set; }     // 24; the container's starting
                                               // BuildContainer.AndroidApiLevel
                                               // (not part of the reuse key)
+        string Platform { get; set; }         // null => the image's platform
+                                              // (RustBuildImage.Platform), else
+                                              // the engine's own
         BuildContainerOptions Clone();
     }
 
@@ -813,6 +845,8 @@ CONTAINERS (CodeBrix.RustTools.Docker.Containers)
         const string TargetPath        = "/work/target";
 
         string Id, Name; RustBuildImage Image;
+        string Platform;                     // the container's platform; null =
+                                             // the engine's own
         string CacheVolumeName; string CacheGitVolumeName;  // + "-git"
         string TargetVolumeName; string ReuseKey;
         bool WasReused; bool KeepOnDispose { get; set; }
@@ -845,8 +879,9 @@ What StartContainerAsync creates:
   - Name: options.Name, else <ContainerNamePrefix>-<12 random hex>, or with
     ReuseExisting <ContainerNamePrefix>-<reuse key>.
 ReuseExisting: the reuse key is a hash of the image (reference and id), the
-cache volume, Name, TargetVolumeName, NetworkDisabled, the merged
-environment, the extra mounts and the limits (a network-less container is
+cache volume, Name, TargetVolumeName, NetworkDisabled, the platform (when
+one is set; an arm64 container is never reused for an x86-64 request), the
+merged environment, the extra mounts and the limits (a network-less container is
 never reused for a networked request, nor the other way round). A labelled container with the same key is returned
 (WasReused = true); a stopped one is started again first. Otherwise a new
 one is created.
@@ -878,6 +913,121 @@ Fetch, then build offline (no network during the compile):
   not in the cache fails the offline build with cargo's "attempting to make
   an HTTP request, but --offline was specified" error (Success false), never
   a hang.
+
+
+FOREIGN PLATFORMS (BuildImageSpec.Platform, BuildContainerOptions.Platform)
+---------------------------------------------------------------------------
+An image and its build containers can be of another architecture than the
+engine's own: a linux/arm64 or linux/riscv64 image on an x86-64 engine (or
+linux/amd64 on an ARM64 engine). Such an image is built and run under
+EMULATION, and inside it everything - rustup, cargo, rustc, build scripts -
+runs as that architecture, so its Linux target is the container's NATIVE
+target (no cross layer, no --target). This is the route for a toolchain
+that only exists as an image of the target architecture, such as the
+aarch64 and riscv64 manylinux images.
+
+PREREQUISITE: the engine's host must be able to execute the architecture.
+On a Linux engine host that is a qemu-user binfmt handler per architecture,
+visible as /proc/sys/fs/binfmt_misc/qemu-aarch64 (arm64) or
+/proc/sys/fs/binfmt_misc/qemu-riscv64 (riscv64); on Debian
+`sudo apt install qemu-user-static binfmt-support` registers them. Docker
+Desktop brings its own emulation. Without it every program of the image
+fails with "exec format error". This package never installs anything: it
+probes and returns guidance.
+
+SLOWNESS: emulated builds are many times slower than native ones (rustup
+alone takes minutes under qemu-user). Prefer the Debian cross layers
+(CrossTargets) when the glibc of the official rust image is acceptable.
+
+    public static class DockerPlatforms            // CodeBrix.RustTools.Docker.Engine
+    {
+        const string LinuxAmd64 = "linux/amd64", LinuxArm64 = "linux/arm64",
+                     LinuxRiscV64 = "linux/riscv64";
+        static string Normalize(string platform);   // trims, lower-cases;
+                    // blank => null; a comma list or a malformed value throws
+                    // ArgumentException (ONE platform: a build loads one
+                    // single-platform image)
+        static string MachineOf(string platform);   // linux/arm64 => aarch64
+        static string ForArchitecture(string arch); // x86_64 => linux/amd64
+        static string ForLinuxTarget(CrossTarget t);// LinuxArm64 => linux/arm64
+        static bool   AreSame(string a, string b);  // variant ignored
+    }
+
+    var arm64 = await wb.EnsureImageAsync(new BuildImageSpec
+    {
+        Containerfile = "Containerfile.aarch64",     // FROM an arm64 image
+        Platform = DockerPlatforms.LinuxArm64,
+    });
+    await using var c = await wb.StartContainerAsync(arm64);   // linux/arm64
+    await wb.ExecAsync(c, ["uname", "-m"]);                    // "aarch64\n"
+    var build = await wb.RunCargoAsync(c, CargoCommand.Build,
+        new CargoBuildOptions { Release = true });   // LinuxNative = LinuxArm64
+                                                     // here: no --target
+
+What Platform does:
+  - BuildImageSpec.Platform goes to the base image pull (CodeBrix.Docker's
+    PullAsync with ImagePullOptions.Platform) and to `docker build
+    --platform` for BOTH routes (the generated Dockerfile and the
+    Containerfile). It is part of the image identity: the derived image's
+    tag (ComputeSpecHash(text, platform)) and the Containerfile image's hash
+    include it, so an arm64 image never reuses the x86-64 image of the same
+    spec. A spec WITHOUT a platform keeps exactly the hash, the requests and
+    the behaviour it had before the property existed.
+  - RustBuildImage.Platform records it. BuildContainerOptions.Platform =
+    null (the default) makes the container use the IMAGE's platform; a
+    different value is the caller's explicit choice (the variant must be
+    present locally - container creation never pulls). The platform is part
+    of the container reuse key. BuildContainer.Platform reports it.
+  - The container's native Linux target follows its platform: in a
+    linux/arm64 container LinuxNative resolves to LinuxArm64, LinuxArm64
+    builds without --target, a LinuxX64 build is a cross build (it needs the
+    LinuxX64 cross layer in the image, which then is installed for arm64),
+    the image layers are computed against the platform, and retrieval names
+    the folders accordingly (runtimes/linux-arm64/native).
+  - ContainerBuildRequest carries both (ImageSpec.Platform for the image,
+    ContainerOptions.Platform for the container, the latter winning), so
+    BuildAsync builds, runs and retrieves for the platform in one call; no
+    other member is needed.
+  - A multi-platform base used directly (no layers): on the containerd image
+    store the inspect of the local tag shows the engine's own variant, so
+    EnsureImageAsync pulls the requested variant (a quick manifest check
+    when it is already local; offline it carries on with what is there).
+    On the older graph-driver store a pull for another platform RE-POINTS
+    the tag (CodeBrix.Docker's note), so the tag then names the foreign
+    image for every user of it - keep foreign-platform work on a
+    containerd-store engine, or use a Containerfile / derived image.
+
+    public sealed class PlatformProbeResult
+    {
+        string Platform;                 // normalized
+        PlatformProbeOutcome Outcome;
+        bool   CanRun { get; }           // Native or Runs
+        bool   IsEmulated;               // not the engine's own platform
+        string ReportedMachine;          // what `uname -m` printed, e.g. aarch64
+        string ProbeImage;               // busybox:latest, or null
+        string Message;                  // includes the engine's words
+        DockerGuidance Guidance;         // EnableForeignPlatforms for
+                                         // NoEmulator, else null
+    }
+
+    public enum PlatformProbeOutcome
+    {
+        Native,      // the engine's own platform (or null): nothing was run
+        Runs,        // a container of the platform ran and printed its machine
+        NoEmulator,  // "exec format error": no qemu-user binfmt handler
+        Refused,     // pull / create / start refused (no such variant, ...)
+        Failed,      // ran but failed, or printed another machine
+    }
+
+ProbePlatformAsync(platform): pulls busybox:latest for the platform, runs
+`uname -m` in a throw-away container created with that platform (labelled
+like every container of the workbench; removed right after, also on
+failure), and classifies the answer. It is cached per platform for the
+lifetime of the workbench, never throws for a Docker-side problem with the
+platform (only for an unusable engine - DockerUnavailableException - an
+invalid platform - ArgumentException - or cancellation), and leaves that
+platform's variant of busybox:latest on the engine (a base image: never
+removed by CleanupAsync).
 
 
 SOURCE COPY (CopySourceAsync)
@@ -1727,7 +1877,7 @@ COMMON PITFALLS TO AVOID
  13. DO NOT use the Flat layout for several targets (their files share
      names); BuildAsync rejects it. Use ByTarget or NuGetRuntimes.
  14. DO NOT add to Targets with a collection initializer when you mean to
-     replace it: the default list already holds LinuxX64.
+     replace it: the default list already holds LinuxNative.
  15. DO NOT publish a NuGet package with the macOS native libraries this
      package makes; they are development builds. Build the published ones
      on a Mac with CodeBrix.RustTools (which can also make the universal
@@ -1781,6 +1931,14 @@ COMMON PITFALLS TO AVOID
      cache is not covered by that cleanup; PruneBuildCache is the only way
      to reclaim it, and it is engine-wide.
 
+ 25. DO NOT ask for a foreign platform (BuildImageSpec.Platform =
+     "linux/arm64" on an x86-64 engine) without the engine host's qemu-user
+     binfmt handler for it: every program of the image then fails with
+     "exec format error". Call ProbePlatformAsync first and show its
+     Guidance when CanRun is false - and expect the emulated build to be
+     many times slower than a native one.
+ 26. DO NOT pass a comma-separated platform list. One image is one
+     platform (ArgumentException); build each platform as its own image.
 
 WHAT THIS PACKAGE DOES NOT DO
 =============================
@@ -1803,8 +1961,10 @@ WHAT THIS PACKAGE DOES NOT DO
   *  are available under Apple's own license terms.                      *
   ************************************************************************
 
-  - Cross-compile for Android on an engine that is not x86-64, or set up
-    amd64 emulation on an ARM64 engine.
+  - Cross-compile for Android on an engine that is not x86-64 by itself, or
+    set up any emulation: foreign platforms (BuildImageSpec.Platform) need
+    the engine host's qemu-user binfmt handlers (or Docker Desktop's
+    emulation), which this package only probes for and explains.
   - Sign macOS binaries with an identity, or notarise them; the linker's
     ad-hoc signature is all they carry.
   - Build macOS code that compiles C or links an Apple framework beyond
@@ -1833,6 +1993,12 @@ The test project exercises every feature against a real Docker engine:
                                          engine rule for Android
   Engine/DockerGuidanceProviderTests.cs  guidance per OS and issue
   Engine/DockerAvailabilityTests.cs      unreachable / unsupported endpoints
+  Engine/DockerPlatformsTests.cs         platform names, machines, lists
+                                         rejected
+  Engine/PlatformProbeTests.cs           probe outcomes ("exec format
+                                         error" = NoEmulator + guidance)
+  Images/RustBuildImageBuilderTests.cs   the platform on the pull and on
+                                         both image builds
   Containers/BuildContainerFactoryTests.cs  container spec, labels, mounts,
                                          environment, reuse key
   Containers/ContainerCargoRunnerTests.cs  the cargo command line and
@@ -1860,6 +2026,10 @@ The test project exercises every feature against a real Docker engine:
   Live/AndroidLiveTests.cs               arm64 + x64 .so, NuGet layout
   Live/LinuxCrossLiveTests.cs            every Linux architecture but the
                                          engine's own, cross-built
+  Live/ForeignPlatformLiveTests.cs       a linux/arm64 Containerfile image
+                                         (Architecture arm64) and its
+                                         container (uname -m = aarch64) under
+                                         qemu-user; the platform probe
   Live/MacOSLiveTests.cs                 arm64 + x64 .dylib, the universal
                                          file, and the byte-for-byte
                                          comparison with a Mac build
@@ -1896,6 +2066,11 @@ QUICK REFERENCE CARD
                               RemoveImages alone never reclaims it)
   Target facts            CrossTargetInfo.Get(CrossTarget.AndroidArm64)
   Engine's own Linux      CrossTargetInfo.NativeLinuxTargetFor(engine)
+  Foreign platform image  new BuildImageSpec { Containerfile = ...,
+                              Platform = DockerPlatforms.LinuxArm64 }
+                              (qemu-user binfmt needed; slow)
+  Can it run?             await wb.ProbePlatformAsync("linux/arm64")
+                              (.CanRun, .Outcome, .Guidance)
   Linux, every arch       Targets = { CrossTarget.LinuxX64, CrossTarget.LinuxArm64,
                               CrossTarget.LinuxRiscV64 }   (foreign ones cross-built)
   Build in one call       await wb.BuildAsync(new ContainerBuildRequest {

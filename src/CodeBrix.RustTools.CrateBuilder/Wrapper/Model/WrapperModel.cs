@@ -64,6 +64,10 @@ internal sealed class WrapperModel
     /// mirrors or status codes.</summary>
     public bool IsPassThrough { get; set; }
 
+    /// <summary>Whether the objects' public fields have generated getters and setters
+    /// (<see cref="WrapperOptions.GenerateFieldAccessors"/>).</summary>
+    public bool HasFieldAccessors { get; set; } = true;
+
     /// <summary>Whether a member passes a list of strings (the native class then declares the
     /// StrRef struct).</summary>
     public bool UsesStrRef { get; set; }

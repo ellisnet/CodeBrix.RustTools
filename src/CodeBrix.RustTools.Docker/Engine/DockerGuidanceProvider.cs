@@ -7,8 +7,9 @@ namespace CodeBrix.RustTools.Docker.Engine;
 
 /// <summary>
 /// Produces operating-system-specific <see cref="DockerGuidance"/>: how to install Docker,
-/// start it, give the current user access to it, enable the WSL 2 backend on Windows and switch
-/// Docker Desktop to Linux containers. The guidance is data for the consuming application to
+/// start it, give the current user access to it, enable the WSL 2 backend on Windows, switch
+/// Docker Desktop to Linux containers and let the engine run other architectures (qemu-user
+/// binfmt handlers, <see cref="DockerGuidanceTopic.EnableForeignPlatforms"/>). The guidance is data for the consuming application to
 /// show; nothing here is ever executed.
 /// </summary>
 public static class DockerGuidanceProvider
@@ -22,6 +23,7 @@ public static class DockerGuidanceProvider
     private const string WslUrl = "https://docs.docker.com/desktop/features/wsl/";
     private const string WindowsFaqUrl = "https://docs.docker.com/desktop/troubleshoot-and-support/faqs/windowsfaqs/";
     private const string ContextsUrl = "https://docs.docker.com/engine/manage-resources/contexts/";
+    private const string MultiPlatformUrl = "https://docs.docker.com/build/building/multi-platform/";
 
     /// <summary>
     /// Returns the guidance that resolves the issues an engine check found, in the order the
@@ -78,6 +80,7 @@ public static class DockerGuidanceProvider
         DockerGuidanceTopic.SwitchToLinuxContainers => SwitchToLinux(os),
         DockerGuidanceTopic.CheckEndpoint => CheckEndpoint(os),
         DockerGuidanceTopic.InstallDockerCli => InstallCli(os),
+        DockerGuidanceTopic.EnableForeignPlatforms => EnableForeignPlatforms(os),
         _ => throw new ArgumentOutOfRangeException(nameof(topic), topic, "Unknown guidance topic."),
     };
 
@@ -337,6 +340,47 @@ public static class DockerGuidanceProvider
             os == OperatingSystemKind.Windows ? "echo $env:DOCKER_HOST" : "echo \"$DOCKER_HOST\"",
         },
         DocumentationUrl = ContextsUrl,
+    };
+
+    private static DockerGuidance EnableForeignPlatforms(OperatingSystemKind os) => os switch
+    {
+        OperatingSystemKind.Windows or OperatingSystemKind.MacOS => new DockerGuidance
+        {
+            Topic = DockerGuidanceTopic.EnableForeignPlatforms,
+            OperatingSystem = os,
+            Title = "Use Docker Desktop's emulation for other architectures",
+            Explanation = "Images of another architecture (for example linux/arm64 or linux/riscv64 on an x86-64 machine) run under QEMU emulation. Docker Desktop includes it; if a foreign-platform container still fails with 'exec format error', update Docker Desktop and restart it.",
+            Commands = new[] { "docker run --rm --platform linux/arm64 busybox uname -m" },
+            DocumentationUrl = MultiPlatformUrl,
+        },
+        OperatingSystemKind.DebianLinux => new DockerGuidance
+        {
+            Topic = DockerGuidanceTopic.EnableForeignPlatforms,
+            OperatingSystem = os,
+            Title = "Install the qemu-user binfmt handlers",
+            Explanation = "Images of another architecture (for example linux/arm64 or linux/riscv64 on an x86-64 machine) run under qemu-user emulation, which the kernel starts through a binfmt_misc handler per architecture. Without one, every program in such a container fails with 'exec format error'. These packages install the static qemu-user emulators and register the handlers (they appear as /proc/sys/fs/binfmt_misc/qemu-aarch64, qemu-riscv64, ...). Emulated builds are many times slower than native ones.",
+            Commands = new[]
+            {
+                "sudo apt install qemu-user-static binfmt-support",
+                "ls /proc/sys/fs/binfmt_misc/",
+            },
+            DocumentationUrl = MultiPlatformUrl,
+            RequiresAdministrator = true,
+        },
+        _ => new DockerGuidance
+        {
+            Topic = DockerGuidanceTopic.EnableForeignPlatforms,
+            OperatingSystem = os,
+            Title = "Register qemu-user binfmt handlers",
+            Explanation = "Images of another architecture (for example linux/arm64 or linux/riscv64 on an x86-64 machine) run under qemu-user emulation, which the kernel starts through a binfmt_misc handler per architecture. Without one, every program in such a container fails with 'exec format error'. Install your distribution's static qemu-user package with its binfmt registration (on Debian and Ubuntu: qemu-user-static and binfmt-support).",
+            Commands = new[]
+            {
+                "# Install the static qemu-user emulators and their binfmt registration for your distribution: " + MultiPlatformUrl,
+                "ls /proc/sys/fs/binfmt_misc/",
+            },
+            DocumentationUrl = MultiPlatformUrl,
+            RequiresAdministrator = true,
+        },
     };
 
     private static DockerGuidance InstallCli(OperatingSystemKind os) => os switch

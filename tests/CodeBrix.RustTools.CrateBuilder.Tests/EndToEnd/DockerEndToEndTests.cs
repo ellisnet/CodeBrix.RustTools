@@ -110,14 +110,15 @@ public class DockerEndToEndTests : IClassFixture<DockerEndToEndFixture>
         var path = result.Targets.Single().ArtifactPaths.Single();
         var glibc = DefaultArtifactVerifier.HighestGlibcVersion(NativeArtifactReader.Read(path));
         Version.Parse(glibc).Should().BeLessThanOrEqualTo(Version.Parse(ManyLinuxImages.X64GlibcFloor));
-        result.Targets.Single().VerificationNotes.Should().Contain(n => n.Contains("within the baseline's 2.28"));
+        result.Targets.Single().VerificationNotes.Should().Contain(n => n.Contains("within the linux-x64 baseline's 2.28"));
+        result.Record.ToolchainDescription.Should().NotContain("platform", "the linux-x64 image keeps the engine's own platform");
         result.Record.Facade.Exports.Should().Contain("datacrate_greet");
         result.Record.ToolchainDescription.Should().Contain(ManyLinuxImages.X64BaseImage);
         EndToEndKit.Log(nameof(an_rlib_crate_is_built_for_linux_x64_in_the_manylinux_image_within_its_glibc_floor_SLOW_IMAGE_BUILD), stopwatch);
     }
 
     [Fact]
-    public async Task readiness_in_docker_mode_names_every_target_for_the_rust_image_and_linux_x64_for_manylinux()
+    public async Task readiness_in_docker_mode_names_every_target_for_the_rust_image_and_the_three_linux_targets_for_manylinux()
     {
         //Arrange
         _docker.SkipUnlessX64Engine();
@@ -148,9 +149,10 @@ public class DockerEndToEndTests : IClassFixture<DockerEndToEndFixture>
         rustImage.Engine.Architecture.Should().Be("x86_64");
         rustImage.BuildableTargets.Should().BeEquivalentTo(CrateTargets.All);
         rustImage.UnbuildableTargets.Should().BeEmpty();
-        manyLinuxReport.BuildableTargets.Should().Equal(CrateTarget.LinuxX64);
-        manyLinuxReport.UnbuildableTargets.Should().HaveCount(CrateTargets.All.Count - 1);
-        EndToEndKit.Log(nameof(readiness_in_docker_mode_names_every_target_for_the_rust_image_and_linux_x64_for_manylinux), stopwatch,
+        manyLinuxReport.BuildableTargets.Should().BeEquivalentTo(new[] { CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64 });
+        manyLinuxReport.UnbuildableTargets.Should().HaveCount(CrateTargets.All.Count - 3);
+        manyLinuxReport.Issues.Where(i => i.Code == "docker.manylinux-emulated").Select(i => i.Target).Should().BeEquivalentTo(new CrateTarget?[] { CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64 });
+        EndToEndKit.Log(nameof(readiness_in_docker_mode_names_every_target_for_the_rust_image_and_the_three_linux_targets_for_manylinux), stopwatch,
             "rust image: " + string.Join(" ", rustImage.BuildableTargets.Select(CrateTargets.Rid)) + "; manylinux: " + string.Join(" ", manyLinuxReport.BuildableTargets.Select(CrateTargets.Rid)));
     }
 
@@ -190,6 +192,55 @@ public class DockerEndToEndTests : IClassFixture<DockerEndToEndFixture>
         var linux = NativeArtifactReader.Read(Path.Combine(request.OutputDirectory, "runtimes", "linux-x64", "native", "libdatacrate.so"));
         linux.ExportedSymbols.Should().Contain("datacrate_encoder_new");
         EndToEndKit.Log(nameof(docker_mode_extraction_forced_into_the_container_reads_the_api_and_the_facade_builds), stopwatch);
+    }
+
+    [Fact]
+    public async Task a_shared_cargo_target_directory_is_bind_mounted_for_the_build_and_the_extractor_and_handed_back_to_its_owner()
+    {
+        //Arrange
+        _docker.SkipUnlessX64Engine();
+        var stopwatch = Stopwatch.StartNew();
+        using var sandbox = SampleSandbox.FromSample(15);
+        var root = Path.GetDirectoryName(sandbox.Directory);
+        var shared = Path.Combine(root, "shared-target");
+        var request = new CrateBuildRequest
+        {
+            Source = new LocalManifestSource(Path.Combine(sandbox.Directory, "Cargo.toml")),
+            Mode = BuildMode.Docker,
+            Targets = { CrateTarget.LinuxX64 },
+            OutputDirectory = Path.Combine(root, "out"),
+        };
+        var stages = CrateBuilderStages.CreateDefault();
+        var extractor = new ApiExtractor(new ApiExtractorOptions { PreferHostToolchain = false, DockerRoute = ApiExtractorDockerRoute.RunInContainer });
+        stages.FacadeGenerator = new FacadeGenerator(extractor, new MappingPlanner(), new FacadeRenderer());
+        using var builder = new CrateBuilder(new CrateBuilderOptions { ScratchRootDirectory = EndToEndKit.ScratchRoot, DockerOptions = DockerEndToEndFixture.Options(), CargoTargetDirectory = shared }, stages);
+        var hash = ApiExtractorToolSource.ContentHash.Substring(0, ApiExtractorToolSource.FolderHashLength);
+
+        //Act
+        var result = await builder.BuildAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+        var builtInShared = Directory.Exists(Path.Combine(shared, "docker"))
+            ? Directory.GetFiles(Path.Combine(shared, "docker"), "libdatacrate.so", SearchOption.AllDirectories)
+            : Array.Empty<string>();
+        var toolInShared = File.Exists(Path.Combine(shared, "api-extractor-docker", hash, "release", ApiExtractorToolSource.ToolName));
+        Exception deleteError = null;
+        try
+        {
+            Directory.Delete(shared, true);
+        }
+        catch (Exception ex)
+        {
+            deleteError = ex;
+        }
+
+        //Assert
+        result.Success.Should().BeTrue(result.ToString() + "\nWarnings: " + string.Join(" | ", result.Warnings));
+        result.Warnings.Should().NotContain(w => w.Contains("shared cargo target folder", StringComparison.Ordinal));
+        builtInShared.Should().NotBeEmpty("the container's cargo output lands in the bind-mounted docker/ folder");
+        toolInShared.Should().BeTrue("the in-container extractor build uses api-extractor-docker/<hash>/");
+        result.Targets.Single().CargoResult.Artifacts.SelectMany(a => a.Filenames).Should().OnlyContain(f => f.StartsWith("/codebrix-cargo-target/", StringComparison.Ordinal));
+        deleteError.Should().BeNull("every file the container wrote was handed back to the folder's owner, so the host user can delete it");
+        File.Exists(Path.Combine(request.OutputDirectory, "runtimes", "linux-x64", "native", "libdatacrate.so")).Should().BeTrue();
+        EndToEndKit.Log(nameof(a_shared_cargo_target_directory_is_bind_mounted_for_the_build_and_the_extractor_and_handed_back_to_its_owner), stopwatch);
     }
 
     [Fact]
@@ -270,5 +321,124 @@ public class DockerEndToEndTests : IClassFixture<DockerEndToEndFixture>
         }
 
         EndToEndKit.Log(nameof(a_cdylib_built_for_android_in_docker_without_webgpu_is_linked_at_the_default_api_level), stopwatch);
+    }
+
+    [Fact]
+    public async Task a_cdylib_is_built_for_linux_arm64_in_the_manylinux_image_under_qemu_and_wrapped_SLOW_EMULATED()
+    {
+        //Arrange
+        _docker.SkipUnlessX64Engine();
+        DockerEndToEndFixture.SkipUnlessBinfmtHandler("qemu-aarch64");
+        DotnetCli.SkipIfMissing();
+        var stopwatch = Stopwatch.StartNew();
+        using var sandbox = SampleSandbox.FromSample(13);
+        var root = Path.GetDirectoryName(sandbox.Directory);
+        var request = new CrateBuildRequest
+        {
+            Source = new LocalManifestSource(Path.Combine(sandbox.Directory, "Cargo.toml")),
+            Mode = BuildMode.Docker,
+            LinuxBaseline = LinuxBaseline.ManyLinux,
+            Targets = { CrateTarget.LinuxArm64 },
+            OutputDirectory = Path.Combine(root, "out", "native"),
+            Wrapper = new WrapperOptions { AssemblyName = "E2E.ManyLinuxArm64", RootNamespace = "E2E.ManyLinuxArm64" },
+        };
+        using var builder = EndToEndKit.NewBuilder(DockerEndToEndFixture.Options());
+        var messages = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+        //Act
+        var result = await builder.BuildAsync(request, new SynchronousProgress<CrateBuildProgress>(p => messages.Enqueue(p.Message ?? string.Empty)), TestContext.Current.CancellationToken);
+        result.Success.Should().BeTrue(result.ToString() + "\nWarnings: " + string.Join(" | ", result.Warnings));
+        var wrapperBuild = await EndToEndKit.DotnetAsync(result.Wrapper.ProjectDirectory, EndToEndKit.Build());
+
+        //Assert
+        var built = result.Targets.Single();
+        built.Outcome.Should().Be(CrateTargetOutcome.Compiled, built.ToString());
+        built.Provenance.Should().Be(ArtifactProvenance.Distributable);
+        var path = built.ArtifactPaths.Single();
+        path.Should().Be(Path.Combine(request.OutputDirectory, "runtimes", "linux-arm64", "native", "libtest_project_13.so"));
+        var info = NativeArtifactReader.Read(path);
+        info.Format.Should().Be(NativeArtifactFormat.Elf);
+        info.Architecture.Should().Be("aarch64");
+        info.ExportedSymbols.Should().Contain("cb_add");
+        built.CargoResult.Artifacts.SelectMany(a => a.Filenames).Should().Contain(f => f.EndsWith("/release/libtest_project_13.so", StringComparison.Ordinal));
+        built.CargoResult.Artifacts.SelectMany(a => a.Filenames).Should().NotContain(f => f.Contains("aarch64-unknown-linux-gnu", StringComparison.Ordinal), "the arm64 container builds its own architecture natively, without --target");
+        Version.Parse(DefaultArtifactVerifier.HighestGlibcVersion(info)).Should().BeLessThanOrEqualTo(Version.Parse(ManyLinuxImages.Arm64GlibcFloor));
+        built.VerificationNotes.Should().Contain(n => n.Contains("within the linux-arm64 baseline's 2.28"), string.Join(" | ", built.VerificationNotes));
+        result.Record.ToolchainDescription.Should().Contain(ManyLinuxImages.Arm64BaseImage);
+        result.Record.ToolchainDescription.Should().Contain("platform linux/arm64 under emulation");
+        messages.Should().Contain(m => m.Contains("linux/arm64 containers run on this engine", StringComparison.Ordinal));
+        var fileOutput = await FileCommandAsync(path);
+        if (fileOutput != null)
+        {
+            fileOutput.Should().Contain("ELF 64-bit LSB shared object");
+            fileOutput.Should().Contain("ARM aarch64");
+        }
+
+        var wrapped = Directory.GetFiles(Path.Combine(result.Wrapper.ProjectDirectory, "runtimes", "linux-arm64", "native"), "*.so");
+        wrapped.Should().ContainSingle();
+        NativeArtifactReader.Read(wrapped.Single()).Architecture.Should().Be("aarch64");
+        wrapperBuild.Should().Contain("0 Warning(s)");
+        EndToEndKit.Log(nameof(a_cdylib_is_built_for_linux_arm64_in_the_manylinux_image_under_qemu_and_wrapped_SLOW_EMULATED), stopwatch, fileOutput);
+    }
+
+    [Fact]
+    public async Task a_cdylib_is_built_for_linux_riscv64_in_the_manylinux_image_under_qemu_within_its_2_39_floor_SLOW_EMULATED()
+    {
+        //Arrange
+        _docker.SkipUnlessX64Engine();
+        DockerEndToEndFixture.SkipUnlessBinfmtHandler("qemu-riscv64");
+        var stopwatch = Stopwatch.StartNew();
+        using var sandbox = SampleSandbox.FromSample(13);
+        var root = Path.GetDirectoryName(sandbox.Directory);
+        var request = new CrateBuildRequest
+        {
+            Source = new LocalManifestSource(Path.Combine(sandbox.Directory, "Cargo.toml")),
+            Mode = BuildMode.Docker,
+            LinuxBaseline = LinuxBaseline.ManyLinux,
+            Targets = { CrateTarget.LinuxRiscV64 },
+            OutputDirectory = Path.Combine(root, "out"),
+        };
+        using var builder = EndToEndKit.NewBuilder(DockerEndToEndFixture.Options());
+
+        //Act
+        var result = await builder.BuildAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+
+        //Assert
+        result.Success.Should().BeTrue(result.ToString());
+        var built = result.Targets.Single();
+        built.Provenance.Should().Be(ArtifactProvenance.Distributable);
+        var info = NativeArtifactReader.Read(built.ArtifactPaths.Single());
+        info.Architecture.Should().Be("riscv64");
+        info.ExportedSymbols.Should().Contain("cb_add");
+        Version.Parse(DefaultArtifactVerifier.HighestGlibcVersion(info)).Should().BeLessThanOrEqualTo(Version.Parse(ManyLinuxImages.RiscV64GlibcFloor));
+        built.VerificationNotes.Should().Contain(n => n.Contains("within the linux-riscv64 baseline's 2.39"), string.Join(" | ", built.VerificationNotes));
+        result.Record.ToolchainDescription.Should().Contain(ManyLinuxImages.RiscV64BaseImage);
+        var fileOutput = await FileCommandAsync(built.ArtifactPaths.Single());
+        if (fileOutput != null)
+        {
+            fileOutput.Should().Contain("UCB RISC-V");
+        }
+
+        EndToEndKit.Log(nameof(a_cdylib_is_built_for_linux_riscv64_in_the_manylinux_image_under_qemu_within_its_2_39_floor_SLOW_EMULATED), stopwatch, fileOutput);
+    }
+
+    /// <summary>The output of the host's <c>file</c> command for a path, or <c>null</c> when
+    /// the command is not on PATH (the check is a sanity cross-check of the ELF reader).</summary>
+    private static async Task<string> FileCommandAsync(string path)
+    {
+        var start = new ProcessStartInfo("file") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        start.ArgumentList.Add("-b");
+        start.ArgumentList.Add(path);
+        try
+        {
+            using var process = Process.Start(start);
+            var output = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+            return process.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
     }
 }

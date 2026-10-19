@@ -204,4 +204,30 @@ public class ContainerfileImageTests
         copy.ContainerfileContext.Should().Be("/x");
         spec.ContainerfileBuildArgs.Should().HaveCount(1);
     }
+
+    [Fact]
+    public void ComputeHash_is_unchanged_without_a_platform_and_differs_per_platform()
+    {
+        //Arrange
+        using var sandbox = SampleSandbox.CreateEmpty();
+        var spec = SpecIn(sandbox);
+        var before = ContainerfileImage.ComputeHash(spec);
+        var arm64 = spec.Clone();
+        arm64.Platform = "linux/arm64";
+        var riscv64 = spec.Clone();
+        riscv64.Platform = "linux/riscv64";
+        var blank = spec.Clone();
+        blank.Platform = " ";
+
+        //Act
+        var arm64Hash = ContainerfileImage.ComputeHash(arm64);
+        var riscv64Hash = ContainerfileImage.ComputeHash(riscv64);
+
+        //Assert
+        ContainerfileImage.ComputeHash(blank).Should().Be(before);
+        arm64Hash.Should().NotBe(before);
+        riscv64Hash.Should().NotBe(before);
+        riscv64Hash.Should().NotBe(arm64Hash);
+        ContainerfileImage.ComputeHash(arm64.Clone()).Should().Be(arm64Hash);
+    }
 }

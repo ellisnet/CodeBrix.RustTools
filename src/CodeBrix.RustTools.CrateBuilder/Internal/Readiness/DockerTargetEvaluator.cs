@@ -9,7 +9,9 @@ namespace CodeBrix.RustTools.CrateBuilder.Internal.Readiness;
 /// Docker package builds every target through its image layers, with two limits it states
 /// itself: Android needs an x86-64 engine (the NDK's tools are x86-64 Linux programs), and any
 /// derived image - a target that is not the engine's own Linux architecture, or a manylinux
-/// Containerfile - is built through the docker CLI.
+/// Containerfile - is built through the docker CLI. A manylinux image of another architecture
+/// than the engine's gets a non-blocking warning (<c>docker.manylinux-emulated</c>): it runs
+/// under qemu-user emulation, which the build probes for before it builds.
 /// </summary>
 internal static class DockerTargetEvaluator
 {
@@ -40,6 +42,19 @@ internal static class DockerTargetEvaluator
                 Target = target,
             });
             return evaluation;
+        }
+
+        if (baseline == LinuxBaseline.ManyLinux && !engine.IsNativePlatform(Building.ManyLinux.ManyLinuxImages.PlatformOf(target)))
+        {
+            var platform = Building.ManyLinux.ManyLinuxImages.PlatformOf(target);
+            var machine = DockerPlatforms.MachineOf(platform);
+            evaluation.Issues.Add(new BuildReadinessIssue
+            {
+                Code = "docker.manylinux-emulated",
+                Message = $"The ManyLinux image of {CrateTargets.Rid(target)} is a {platform} image and this engine is {engine.Architecture ?? "of unknown architecture"}: it is built and run under qemu-user emulation, "
+                          + $"which needs a qemu-user binfmt handler for {machine} on the engine's host (/proc/sys/fs/binfmt_misc/qemu-{machine}; the build probes for it first) and is many times slower than a native build.",
+                Target = target,
+            });
         }
 
         if (NeedsDerivedImage(target, engine, baseline) && !engine.DockerCliFound)

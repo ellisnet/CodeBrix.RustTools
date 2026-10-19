@@ -71,6 +71,21 @@ public sealed class BuildContainerOptions
     public bool NetworkDisabled { get; set; }
 
     /// <summary>
+    /// The Docker platform the container runs on, for example <c>linux/arm64</c>
+    /// (<see cref="Engine.DockerPlatforms"/>; ONE platform, a comma-separated list is rejected).
+    /// <c>null</c> (the default) uses the image's platform (<see cref="Images.RustBuildImage.Platform"/>,
+    /// from <see cref="Images.BuildImageSpec.Platform"/>), and for an image prepared without one
+    /// leaves the choice to the engine (its own platform) exactly as before the property existed.
+    /// Setting a platform other than the image's is the caller's explicit choice; the variant
+    /// must be present locally. Part of the reuse key (an arm64 container is never reused for an
+    /// x86-64 request). The container's native Linux target - built without <c>--target</c> - is
+    /// the platform's architecture, so <see cref="Images.CrossTarget.LinuxNative"/> in an arm64
+    /// container is <see cref="Images.CrossTarget.LinuxArm64"/>, under emulation on an x86-64
+    /// engine (see <see cref="DockerRustWorkbench.ProbePlatformAsync"/>).
+    /// </summary>
+    public string Platform { get; set; }
+
+    /// <summary>
     /// The Android API level the container's <see cref="BuildContainer.AndroidApiLevel"/> starts
     /// at: the level cargo links the Android targets for. Default 24
     /// (<c>AndroidLinkProfile.DefaultApiLevel</c>); a library that links a native package built
@@ -96,5 +111,6 @@ public sealed class BuildContainerOptions
         TargetVolumeName = TargetVolumeName,
         NetworkDisabled = NetworkDisabled,
         AndroidApiLevel = AndroidApiLevel,
+        Platform = Platform,
     };
 }

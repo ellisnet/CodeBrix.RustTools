@@ -58,6 +58,15 @@ internal sealed class ContainerBuildPipeline
     }
 
     /// <summary>
+    /// The platform the request's container runs on: <see cref="BuildContainerOptions.Platform"/>
+    /// of <see cref="ContainerBuildRequest.ContainerOptions"/>, else
+    /// <see cref="BuildImageSpec.Platform"/> of <see cref="ContainerBuildRequest.ImageSpec"/>
+    /// (normalized); <c>null</c> = the engine's own.
+    /// </summary>
+    internal static string PlatformFor(ContainerBuildRequest request)
+        => DockerPlatforms.Normalize(request.ContainerOptions?.Platform) ?? DockerPlatforms.Normalize(request.ImageSpec?.Platform);
+
+    /// <summary>
     /// The targets cargo builds for a request, in order: every requested target, with
     /// <see cref="CrossTarget.LinuxNative"/> resolved to the engine's own Linux target and
     /// <see cref="CrossTarget.MacOSUniversal"/> replaced by its two slices; each once.
@@ -191,9 +200,13 @@ internal sealed class ContainerBuildPipeline
                 throw _workbench.Unavailable(engine, null);
             }
 
-            imageSpec = ImageSpecFor(_request, engine);
-            buildTargets = BuildTargetsFor(_request.Targets, engine);
-            CrossTargetInfo.EnsureEngineCanBuild(engine, imageSpec.CrossTargets);
+            // A request for another platform builds in a container of that platform: its native
+            // Linux target, the cross layers it needs and the artifact folders follow the
+            // container, not the engine host.
+            var buildEngine = engine.ForContainerPlatform(PlatformFor(_request));
+            imageSpec = ImageSpecFor(_request, buildEngine);
+            buildTargets = BuildTargetsFor(_request.Targets, buildEngine);
+            CrossTargetInfo.EnsureEngineCanBuild(buildEngine, imageSpec.CrossTargets);
 
             Enter(BuildStage.EnsuringImage, "Preparing the build image from " + imageSpec.BaseImageReference);
             image = await _workbench.EnsureImageAsync(imageSpec, new LineProgress(this, BuildStage.EnsuringImage), token).ConfigureAwait(false);
@@ -301,7 +314,7 @@ internal sealed class ContainerBuildPipeline
                 foreach (var target in buildTargets)
                 {
                     Report(BuildStage.Building, $"Building for {CrossTargetInfo.Get(target)}");
-                    var targetOptions = OptionsForTarget(_request, options, target, engine);
+                    var targetOptions = OptionsForTarget(_request, options, target, buildEngine);
                     if (estimate)
                     {
                         if (!metadataByTarget.TryGetValue(target, out var metadata))
@@ -336,7 +349,7 @@ internal sealed class ContainerBuildPipeline
                 var parts = new List<ArtifactRetrievalResult>();
                 foreach (var requested in _request.Targets)
                 {
-                    var target = CrossTargetInfo.Resolve(requested, engine);
+                    var target = CrossTargetInfo.Resolve(requested, buildEngine);
                     if (CrossTargetInfo.Get(target).IsMacOSUniversal)
                     {
                         if (results.TryGetValue(CrossTarget.MacOSArm64, out var arm64) && arm64.Success
@@ -348,7 +361,7 @@ internal sealed class ContainerBuildPipeline
                     }
                     else if (results.TryGetValue(target, out var result) && result.Success)
                     {
-                        parts.Add(await ArtifactRetriever.RetrieveAsync(transport, result.Artifacts, _request.Retrieval, target, engine, token).ConfigureAwait(false));
+                        parts.Add(await ArtifactRetriever.RetrieveAsync(transport, result.Artifacts, _request.Retrieval, target, buildEngine, token).ConfigureAwait(false));
                     }
                 }
 

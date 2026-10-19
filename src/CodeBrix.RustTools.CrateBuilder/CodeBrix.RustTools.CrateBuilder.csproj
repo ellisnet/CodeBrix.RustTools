@@ -73,7 +73,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CodeBrix.LibGit2.MitLicenseForever" Version="1.0.290.970" />
+    <PackageReference Include="CodeBrix.LibGit2.MitLicenseForever" Version="1.0.292.267" />
     <PackageReference Include="CodeBrix.Templating.BsdLicenseForever" Version="1.0.284.213" />
     <PackageReference Include="CodeBrix.WebGpu.Native.MitLicenseForever" Version="1.0.290.1433" />
   </ItemGroup>

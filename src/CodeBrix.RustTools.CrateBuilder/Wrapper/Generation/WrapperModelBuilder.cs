@@ -60,6 +60,7 @@ internal static class WrapperModelBuilder
             CrateLicense = input.CrateLicense,
             SourceDescription = input.SourceDescription,
             IsPassThrough = plan.UpstreamIsCdylib,
+            HasFieldAccessors = plan.FieldAccessorsOmitted == null,
             LinksWebGpu = input.LinkToCodeBrixWebGpu || plan.LinkToCodeBrixWebGpu,
             WebGpuPackageVersion = input.WebGpuPackageVersion,
             HasSmokeTests = options.GenerateSmokeTests,

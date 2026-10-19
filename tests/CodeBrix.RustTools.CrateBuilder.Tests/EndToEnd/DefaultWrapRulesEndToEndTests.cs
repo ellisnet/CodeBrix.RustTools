@@ -102,6 +102,114 @@ public class DefaultWrapRulesEndToEndTests
         EndToEndKit.Log(nameof(a_data_shaped_crate_is_wrapped_with_fields_copies_paths_lists_and_constants), stopwatch);
     }
 
+    [Fact]
+    public async Task with_field_accessors_turned_off_an_object_keeps_its_field_constructor_and_the_wrapper_compiles()
+    {
+        //Arrange
+        await Capabilities.SkipIfCargoMissingAsync();
+        DotnetCli.SkipIfMissing();
+        var target = EndToEndKit.HostTargetOrSkip();
+        var stopwatch = Stopwatch.StartNew();
+        using var sandbox = SampleSandbox.CreateEmpty();
+        sandbox.WriteFile("fieldkit/Cargo.toml", "[package]\nname = \"fieldkit\"\nversion = \"0.1.0\"\nedition = \"2021\"\nlicense = \"MIT\"\n\n[dependencies]\n");
+        sandbox.WriteFile("fieldkit/src/lib.rs", FieldkitLib);
+        var request = new CrateBuildRequest
+        {
+            Source = new LocalManifestSource(Path.Combine(sandbox.Directory, "fieldkit", "Cargo.toml")),
+            Mode = BuildMode.Host,
+            Targets = { target },
+            OutputDirectory = Path.Combine(sandbox.Directory, "out"),
+            Offline = true,
+            Wrapper = new WrapperOptions { AssemblyName = "E2E.Fields", RootNamespace = "E2E.Fields", GenerateFieldAccessors = false },
+        };
+        using var builder = EndToEndKit.NewBuilder();
+
+        //Act
+        var result = await builder.BuildAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+        result.Success.Should().BeTrue(result.ToString() + "\nWarnings: " + string.Join(" | ", result.Warnings));
+        var wrapperBuild = await EndToEndKit.DotnetAsync(result.Wrapper.ProjectDirectory, EndToEndKit.Build());
+        var output = await EndToEndKit.RunConsumerAppAsync(Path.Combine(sandbox.Directory, "app"), result.Wrapper.ProjectPath, FieldkitProgram);
+
+        //Assert
+        wrapperBuild.Should().Contain("0 Warning(s)");
+        EndToEndKit.Lines(output).Where(l => Regex.IsMatch(l, "^[a-z ]+=")).Should().Equal(
+            "holder=7 box",
+            "shape=Rect 6");
+        var holderSource = File.ReadAllText(Path.Combine(result.Wrapper.ProjectDirectory, "Holder.cs"));
+        holderSource.Should().Contain("public Holder(");
+        holderSource.Should().NotContain("GetId");
+        holderSource.Should().NotContain("SetTitle");
+        result.Record.Facade.Exports.Should().NotContain(e => e.Contains("_get_", StringComparison.Ordinal) || e.Contains("_set_", StringComparison.Ordinal));
+        var report = File.ReadAllText(result.WrapReportPath);
+        report.Should().Contain("Field accessors:   off - 4 getters and setters of objects' public fields not generated, because WrapperOptions.GenerateFieldAccessors is false");
+        var flat = Regex.Replace(report, "\\s+", " ");
+        flat.Should().Contain("Settings (struct) Why: it has no wrappable members: it has no public methods or constructors, it cannot be built from its fields (some are private), its public fields get no getters or setters because WrapperOptions.GenerateFieldAccessors is false (so an object made by its Default could not be read or changed)");
+        var agentReadme = File.ReadAllText(Path.Combine(result.Wrapper.ProjectDirectory, "AGENT-README.txt"));
+        agentReadme.Should().NotContain("Get<Field>() getters, and methods");
+        agentReadme.Should().Contain("getters and setters of public fields were turned off");
+        EndToEndKit.Log(nameof(with_field_accessors_turned_off_an_object_keeps_its_field_constructor_and_the_wrapper_compiles), stopwatch);
+    }
+
+    /// <summary>A crate whose objects have public fields: Holder (every field public, so a
+    /// constructor from the fields), Settings (one private field and Default, so only its
+    /// accessors could keep it) and a data-carrying enum (Variant() and per-variant
+    /// constructors, which stay).</summary>
+    private const string FieldkitLib = """
+        /// A labelled box.
+        #[derive(Clone, Debug, Default)]
+        pub struct Holder {
+            /// Its number.
+            pub id: u32,
+            /// Its label.
+            pub title: String,
+        }
+
+        impl Holder {
+            /// "<id> <title>".
+            pub fn describe(&self) -> String {
+                format!("{} {}", self.id, self.title)
+            }
+        }
+
+        /// Settings with a private part.
+        #[derive(Clone, Debug, Default)]
+        pub struct Settings {
+            pub name: String,
+            count: u32,
+        }
+
+        /// A shape.
+        #[derive(Clone, Debug)]
+        pub enum Shape {
+            Circle(f64),
+            Rect { w: f64, h: f64 },
+            Empty,
+        }
+
+        impl Shape {
+            /// The area.
+            pub fn area(&self) -> f64 {
+                match self {
+                    Shape::Circle(r) => 3.0 * r * r,
+                    Shape::Rect { w, h } => w * h,
+                    Shape::Empty => 0.0,
+                }
+            }
+        }
+
+        """;
+
+    private const string FieldkitProgram = """
+        using System;
+        using E2E.Fields;
+
+        using var holder = new Holder(7, "box");
+        Console.WriteLine("holder=" + holder.Describe());
+        using var shape = Shape.Rect(2, 3);
+        Console.WriteLine("shape=" + shape.Variant() + " " + shape.Area());
+
+        """;
+
     /// <summary>Compiles the generated header of the newest kept run with the machine's C
     /// compiler (when there is one; otherwise Compiler is null), then deletes that run folder.</summary>
     private static async Task<(string Compiler, int ExitCode, string Output)> CheckAndRemoveKeptRunAsync(string headerName)

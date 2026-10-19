@@ -508,6 +508,26 @@ The Docker suite (tests/CodeBrix.RustTools.Docker.Tests):
     (sleep) does not reap orphans; the test ignores those, and they vanish
     with the container.
   * The base image (rust:latest) is never removed by the suite.
+  * FOREIGN PLATFORMS (Live/ForeignPlatformLiveTests.cs, "Docker engine"
+    collection): a Containerfile image `FROM alpine:latest` built with
+    Platform linux/arm64 (inspect Architecture arm64; its tag differs from
+    the same spec's without a platform; a second EnsureImageAsync reuses it),
+    a build container from it (`uname -m` = aarch64, BuildContainer.Platform),
+    the platform probe (Runs for linux/arm64, cached, Native for the engine's
+    own, no probe container left behind) and a probe of linux/sparc64, which
+    busybox does not publish (Refused). Each test SKIPS BY NAME when the
+    engine is arm64 itself or /proc/sys/fs/binfmt_misc/qemu-aarch64 is
+    absent. The "no binfmt handler" outcome (NoEmulator) cannot be produced
+    live on a machine that has every common qemu-user handler registered
+    (this laptop has qemu-aarch64, qemu-riscv64, qemu-arm, qemu-ppc64le,
+    qemu-s390x and more) without changing the host, so its classification
+    and guidance are unit-tested (Engine/PlatformProbeTests.cs). No Rust
+    image is built for a foreign platform here; CrateBuilder's ManyLinux
+    tests do that. The pulls leave the linux/arm64 variants of alpine:latest
+    and busybox:latest on the engine (base images: never removed; on the
+    containerd image store they are variants of the same tags). The images
+    the tests build carry the fixture's labels and are removed with the
+    others.
   * Hygiene after a run (unless the KEEP variable is set): these list
     nothing -
         docker ps -a --filter label=codebrix.rusttools.docker=1
@@ -553,8 +573,10 @@ The CrateBuilder suite (tests/CodeBrix.RustTools.CrateBuilder.Tests):
     names an exported sysroot, Windows only with the gnullvm targets and
     llvm-mingw; each skips with the readiness check's own reason. Docker
     (skip without an engine; x86-64 engine): linux-x64 + win-x64 in the rust
-    image, and ONE ManyLinux linux-x64 build (pulls the manylinux_2_28 image
-    and builds the rustup image the first time, about 1.5 minutes). The
+    image, and ONE ManyLinux build of linux-x64 + win-x64 (linux-x64 built
+    in the manylinux_2_28 image - pulled and built with rustup the first
+    time, about 1.5 minutes -, win-x64 NotBuildableInThisMode: ManyLinux is
+    Linux only). The emulated ManyLinux targets are covered by EndToEnd/. The
     fixture's workbench uses label prefix codebrix.rusttools.cratebuilder.tests
     and removes its containers, volumes and derived images
     (CODEBRIX_RUSTTOOLS_KEEP_DOCKER_CACHE=1 keeps them). Durations go to
@@ -623,7 +645,18 @@ The CrateBuilder suite (tests/CodeBrix.RustTools.CrateBuilder.Tests):
     CleanUpAfterBuild; skips without github.com:443 - one probe shared by
     the whole run, Capabilities.CanReachGitHubAsync, three 20-second
     attempts, so parallel load cannot cause a false skip) and Docker mode (sample
-    15 for linux-x64 + win-x64 in the rust image, ManyLinux linux-x64, and
+    15 for linux-x64 + win-x64 in the rust image, ManyLinux linux-x64,
+    ManyLinux linux-arm64 of sample 13 under qemu-user emulation with a
+    wrapper (ELF AArch64, built natively in the arm64 container without
+    --target, within glibc 2.28, `file` cross-check, the wrapper's
+    runtimes/linux-arm64/native/*.so an AArch64 ELF; skips by name without
+    /proc/sys/fs/binfmt_misc/qemu-aarch64; measured here at about 1.6 minutes
+    from an engine without the arm64 image - pull, rustup under emulation,
+    cargo and the wrapper build - so it is in the normal suite), ManyLinux
+    linux-riscv64 of sample 13 (within glibc 2.39; skips by name without
+    /proc/sys/fs/binfmt_misc/qemu-riscv64; measured here at about 2.5
+    minutes; in the normal suite like the x64 and arm64 ManyLinux tests - the
+    three run together or not at all), and
     sample 15 with the API extraction FORCED into the container
     (ApiExtractorDockerRoute.RunInContainer through the internal stages
     constructor), so that route runs on a machine with a host toolchain too,
@@ -1116,9 +1149,30 @@ rustflags in CARGO_TARGET_<TRIPLE>_RUSTFLAGS, which CodeBrix.RustTools.Docker
 appends to its own per-target flags), and the container links Android at
 HostBuildDriver.AndroidApiLevelFor (BuildContainerOptions.AndroidApiLevel, 33
 when WebGPU-linked) - the same level as host mode. The "{workspace}" contribution token is the staging root on
-the host and /work in Docker mode. The ManyLinux limits (linux-x64 only, x86-64
-engine) are TargetMatrix.ManyLinuxLimit, used by the readiness check and the
-driver alike.
+the host and /work in Docker mode. The ManyLinux limit (Linux targets only) is
+TargetMatrix.ManyLinuxLimit, used by the readiness check and the driver alike.
+ManyLinux builds one image and one container per platform
+(DockerBuildDriver.GroupsFor; the rust image keeps all targets in one): the
+x86_64 / aarch64 / riscv64 Containerfiles (ManyLinux/, embedded) are written to
+<run>/manylinux-<arch>/; CreateSpec sets BuildImageSpec.Platform for aarch64 and
+riscv64 (linux/arm64, linux/riscv64) and leaves x86_64 without one, so the x64
+image keeps the identity it always had (on a non-x86-64 engine the driver sets
+linux/amd64 itself). Before building, the driver probes every platform that is
+not the engine's own (DockerRustWorkbench.ProbePlatformAsync, cached per
+workbench); a failed probe makes the target NotBuildableInThisMode with
+ManyLinuxImages.EmulationUnavailableReason (qemu-user binfmt, the probe's
+message, the EnableForeignPlatforms guidance). The readiness check only warns
+(docker.manylinux-emulated). GlibcFloorVerifier takes the per-target floor
+(ManyLinuxImages.GlibcFloor: 2.28, 2.28, 2.39). With a shared cargo target
+folder each ManyLinux image gets docker/manylinux-<arch>/ (SharedCargoTarget
+.ManyLinuxFolderFor): cargo's triple folders do not separate them, because each
+image builds its own architecture natively into release/ (verified: the
+manylinux containers run cargo without --target). The riscv64 base is
+manylinux_2_39 because quay.io/pypa publishes no older riscv64 baseline
+(manylinux_2_28/2_31/2_35_riscv64 do not exist); the three digests (dated tag
+2026.07.19-1) are the ones the other CodeBrix native-library builds pin, and
+the rustup-init SHA-256s are the ones static.rust-lang.org publishes for the
+pinned rustup release (rustup-init.sha256 beside each host's rustup-init).
 WebGPU verification: an artifact that links libcodebrix_wgpu by name passes;
 one that imports wgpu* symbols (ELF / Mach-O undefined symbols, read by
 WebGpu/Internal) or exports them, or links another wgpu library, fails; one

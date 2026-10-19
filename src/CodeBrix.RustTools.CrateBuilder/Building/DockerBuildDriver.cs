@@ -19,18 +19,24 @@ namespace CodeBrix.RustTools.CrateBuilder.Building;
 
 /// <summary>
 /// Builds a staged crate inside Docker (CodeBrix.RustTools.Docker's
-/// <see cref="DockerRustWorkbench"/> from the context): ONE build container for all buildable
-/// targets - the whole staging root copied into <c>/work</c> (<see cref="CopyRootFor"/>), cargo
-/// run per target in the built manifest's folder below it with <c>-p &lt;crate&gt;</c>, the
-/// shared libraries retrieved in the request's layout, the Docker package's default network
-/// (crates download unless Offline) - in the image the request's <see cref="LinuxBaseline"/>
-/// selects:
+/// <see cref="DockerRustWorkbench"/> from the context): the whole staging root copied into
+/// <c>/work</c> (<see cref="CopyRootFor"/>), cargo run per target in the built manifest's folder
+/// below it with <c>-p &lt;crate&gt;</c>, the shared libraries retrieved in the request's layout,
+/// the Docker package's default network (crates download unless Offline) - in the image the
+/// request's <see cref="LinuxBaseline"/> selects:
 /// <list type="number">
-/// <item><see cref="LinuxBaseline.RustImage"/>: the workbench's default image plus the
-/// cross layers the Docker package adds for the targets;</item>
-/// <item><see cref="LinuxBaseline.ManyLinux"/>: CrateBuilder's manylinux Containerfile
-/// (<see cref="ManyLinuxImages"/>; linux-x64 only, see its remarks), and the built library is
-/// checked against the image's glibc floor.</item>
+/// <item><see cref="LinuxBaseline.RustImage"/>: ONE build container for all buildable targets,
+/// from the workbench's default image plus the cross layers the Docker package adds for the
+/// targets;</item>
+/// <item><see cref="LinuxBaseline.ManyLinux"/>: CrateBuilder's manylinux Containerfile of each
+/// Linux target (<see cref="ManyLinuxImages"/>), ONE image and ONE container per platform. A
+/// target whose image is not the engine's own architecture (linux-arm64 / linux-riscv64 on an
+/// x86-64 engine) runs under qemu-user emulation: the platform is probed once per build
+/// (<see cref="DockerRustWorkbench.ProbePlatformAsync"/>), a failed probe makes the target
+/// <see cref="CrateTargetOutcome.NotBuildableInThisMode"/> with
+/// <see cref="ManyLinuxImages.EmulationUnavailableReason"/>, and a successful one builds it
+/// (slowly). Each built library is checked against its own image's glibc floor
+/// (<see cref="ManyLinuxImages.GlibcFloor"/>).</item>
 /// </list>
 /// Each target's cargo run gets its own contribution environment (the Docker package takes the
 /// options per run); a contribution's rustflags go into the target's
@@ -39,6 +45,10 @@ namespace CodeBrix.RustTools.CrateBuilder.Building;
 /// one container. The container links Android for
 /// <see cref="HostBuildDriver.AndroidApiLevelFor"/> (33 when WebGPU-linked, as in host mode).
 /// macOS files from Docker are always development builds.
+/// With <see cref="CrateBuilderOptions.CargoTargetDirectory"/> its <c>docker/</c> sub-folder
+/// (<c>docker/manylinux-&lt;arch&gt;/</c> for a ManyLinux image) is bind-mounted into the
+/// container and is cargo's target folder there; after the container's last cargo run its
+/// files are handed back to the folder's owner (<see cref="SharedCargoTarget"/>).
 /// </summary>
 internal sealed class DockerBuildDriver : IBuildDriver
 {
@@ -124,9 +134,18 @@ internal sealed class DockerBuildDriver : IBuildDriver
     /// <summary>The build container's settings for a request: Android linked at
     /// <see cref="HostBuildDriver.AndroidApiLevelFor"/>, the same level host mode uses.</summary>
     public static BuildContainerOptions ContainerOptionsFor(CrateBuildRequest request)
-        => new BuildContainerOptions { AndroidApiLevel = HostBuildDriver.AndroidApiLevelFor(request) };
+        => ContainerOptionsFor(request, null);
 
-    /// <summary>"Docker image R (id I, base B) on Docker engine V (arch)".</summary>
+    /// <summary>The build container's settings for a request, with the shared cargo target
+    /// folder <paramref name="sharedTargetDirectory"/> (the <c>docker/</c> sub-folder of
+    /// <see cref="CrateBuilderOptions.CargoTargetDirectory"/>; <c>null</c> = none)
+    /// bind-mounted at <see cref="SharedCargoTarget.ContainerPath"/>.</summary>
+    public static BuildContainerOptions ContainerOptionsFor(CrateBuildRequest request, string sharedTargetDirectory)
+        => SharedCargoTarget.Mount(new BuildContainerOptions { AndroidApiLevel = HostBuildDriver.AndroidApiLevelFor(request) }, sharedTargetDirectory);
+
+    /// <summary>"Docker image R (id I, base B[, platform P under emulation]) on Docker engine V
+    /// (arch)"; a Containerfile image names its <c>BASE_IMAGE</c> build argument (the pinned
+    /// manylinux digest) and the Rust version.</summary>
     public static string DescribeImage(RustBuildImage image, DockerEngineInfo engine)
     {
         if (image == null)
@@ -134,10 +153,79 @@ internal sealed class DockerBuildDriver : IBuildDriver
             return engine == null ? null : $"Docker engine {engine.ServerVersion ?? "unknown"} ({engine.Architecture ?? "unknown"})";
         }
 
-        var origin = image.ContainerfileImageReference != null
-            ? $"from Containerfile image {image.ContainerfileImageReference} ({ManyLinuxImages.X64BaseImage}, Rust {ManyLinuxImages.RustVersion})"
-            : "base " + image.BaseImageReference;
+        string origin;
+        if (image.ContainerfileImageReference != null)
+        {
+            var arguments = image.Spec?.ContainerfileBuildArgs;
+            var baseImage = arguments != null && arguments.TryGetValue("BASE_IMAGE", out var value) ? value : "unknown base";
+            var rust = arguments != null && arguments.TryGetValue("RUST_VERSION", out var version) ? version : ManyLinuxImages.RustVersion;
+            origin = $"from Containerfile image {image.ContainerfileImageReference} ({baseImage}, Rust {rust})";
+        }
+        else
+        {
+            origin = "base " + image.BaseImageReference;
+        }
+
+        if (image.Platform != null)
+        {
+            origin += engine != null && engine.IsNativePlatform(image.Platform)
+                ? $", platform {image.Platform}"
+                : $", platform {image.Platform} under emulation";
+        }
+
         return $"Docker image {image.Reference} (id {image.ImageId}, {origin}) on Docker engine {engine?.ServerVersion ?? "unknown"} ({engine?.Architecture ?? "unknown"})";
+    }
+
+    /// <summary>
+    /// One build container's worth of a request: the image it runs, the targets built in it
+    /// and the shared cargo target folder mounted into it (<c>null</c> = none).
+    /// </summary>
+    internal sealed class BuildGroup
+    {
+        public BuildImageSpec ImageSpec { get; init; }
+
+        public IReadOnlyList<CrateTarget> Targets { get; init; }
+
+        public string SharedTargetDirectory { get; init; }
+    }
+
+    /// <summary>
+    /// The build groups of a request's buildable targets: one group for
+    /// <see cref="LinuxBaseline.RustImage"/> (the default image plus the targets' cross
+    /// layers), one per target for <see cref="LinuxBaseline.ManyLinux"/> (its manylinux
+    /// Containerfile, written into <c>&lt;scratch&gt;/manylinux-&lt;arch&gt;</c>; a foreign
+    /// architecture's spec carries its platform, also on an engine where linux-x64 is the
+    /// foreign one).
+    /// </summary>
+    public static IReadOnlyList<BuildGroup> GroupsFor(CrateBuildRequest request, CrateBuilderContext context, DockerEngineInfo engine, IReadOnlyList<CrateTarget> targets)
+    {
+        var groups = new List<BuildGroup>();
+        if (request.LinuxBaseline == LinuxBaseline.ManyLinux)
+        {
+            var scratch = string.IsNullOrWhiteSpace(context.RunDirectory) ? context.ScratchRootDirectory : context.RunDirectory;
+            foreach (var target in targets)
+            {
+                var spec = ManyLinuxImages.CreateSpec(target, Path.Combine(scratch, "manylinux-" + ManyLinuxImages.ArchitectureName(target)));
+                var platform = ManyLinuxImages.PlatformOf(target);
+                if (spec.Platform == null && engine != null && !engine.IsNativePlatform(platform))
+                {
+                    spec.Platform = platform;
+                }
+
+                groups.Add(new BuildGroup { ImageSpec = spec, Targets = new[] { target }, SharedTargetDirectory = SharedCargoTarget.ManyLinuxFolderFor(context.Options, target) });
+            }
+
+            return groups;
+        }
+
+        var imageSpec = new BuildImageSpec();
+        foreach (var crossTarget in targets.Select(CrateTargets.ToCrossTarget).Where(t => CrossTargetInfo.Get(t).RequiresLayer && !imageSpec.CrossTargets.Contains(t)))
+        {
+            imageSpec.CrossTargets.Add(crossTarget);
+        }
+
+        groups.Add(new BuildGroup { ImageSpec = imageSpec, Targets = targets.ToList(), SharedTargetDirectory = SharedCargoTarget.For(context.Options, SharedCargoTarget.DockerFolderName) });
+        return groups;
     }
 
     public async Task<IReadOnlyList<CrateTargetResult>> BuildAsync(StagedWorkspace workspace, CrateBuildRequest request, CrateBuilderContext context, IProgress<CrateBuildProgress> progress, CancellationToken cancellationToken)
@@ -155,41 +243,53 @@ internal sealed class DockerBuildDriver : IBuildDriver
         var built = new Dictionary<CrateTarget, CrateTargetResult>();
         var descriptions = new List<string>();
 
-        var prepared = new Dictionary<CrateTarget, BuildContribution>();
-        foreach (var target in matrix.Buildable)
-        {
-            prepared[target] = await ContributionMerger.PrepareAsync(_contributions, workspace, target, BuildMode.Docker, context, WorkspaceTokenValue, cancellationToken).ConfigureAwait(false);
-        }
-
         var targets = matrix.Buildable.ToList();
         if (targets.Count > 0)
         {
             try
             {
-                var (results, description) = await BuildAllAsync(workbench, engine, workspace, crate, request, context, targets, prepared, progress, cancellationToken).ConfigureAwait(false);
-                foreach (var result in results)
-                {
-                    built[result.Target] = result;
-                }
-
-                if (description != null)
-                {
-                    descriptions.Add(description);
-                }
+                targets = await RuleOutUnrunnablePlatformsAsync(workbench, engine, request, context, targets, built, progress, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is DockerRustToolsException or RustToolsException or IOException or ArgumentException)
+            catch (Exception ex) when (ex is DockerRustToolsException or RustToolsException or ArgumentException)
             {
                 foreach (var target in targets)
                 {
-                    built[target] = new CrateTargetResult
+                    built[target] = FailedResult(target, "The Docker build failed: " + ex.Message);
+                }
+
+                targets.Clear();
+            }
+        }
+
+        var prepared = new Dictionary<CrateTarget, BuildContribution>();
+        foreach (var target in targets)
+        {
+            prepared[target] = await ContributionMerger.PrepareAsync(_contributions, workspace, target, BuildMode.Docker, context, WorkspaceTokenValue, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (targets.Count > 0)
+        {
+            foreach (var group in GroupsFor(request, context, engine, targets))
+            {
+                try
+                {
+                    var (results, description) = await BuildGroupAsync(workbench, engine, workspace, crate, request, context, group, prepared, progress, cancellationToken).ConfigureAwait(false);
+                    foreach (var result in results)
                     {
-                        Target = target,
-                        Rid = CrateTargets.Rid(target),
-                        Triple = CrateTargets.Triple(target),
-                        Outcome = CrateTargetOutcome.Failed,
-                        Provenance = ProvenanceOf(target),
-                        Message = "The Docker build failed: " + ex.Message,
-                    };
+                        built[result.Target] = result;
+                    }
+
+                    if (description != null)
+                    {
+                        descriptions.Add(description);
+                    }
+                }
+                catch (Exception ex) when (ex is DockerRustToolsException or RustToolsException or IOException or ArgumentException)
+                {
+                    foreach (var target in group.Targets)
+                    {
+                        built[target] = FailedResult(target, "The Docker build failed: " + ex.Message);
+                    }
                 }
             }
         }
@@ -205,28 +305,87 @@ internal sealed class DockerBuildDriver : IBuildDriver
         return ordered;
     }
 
+    /// <summary>
+    /// For <see cref="LinuxBaseline.ManyLinux"/>: probes the platform of every target whose
+    /// manylinux image is not the engine's own architecture (once per platform; the workbench
+    /// caches the answer) and records a <see cref="CrateTargetOutcome.NotBuildableInThisMode"/>
+    /// result in <paramref name="built"/> for each one whose platform cannot run. Returns the
+    /// targets still to build.
+    /// </summary>
+    private static async Task<List<CrateTarget>> RuleOutUnrunnablePlatformsAsync(
+        DockerRustWorkbench workbench,
+        DockerEngineInfo engine,
+        CrateBuildRequest request,
+        CrateBuilderContext context,
+        List<CrateTarget> targets,
+        IDictionary<CrateTarget, CrateTargetResult> built,
+        IProgress<CrateBuildProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        if (request.LinuxBaseline != LinuxBaseline.ManyLinux)
+        {
+            return targets;
+        }
+
+        var remaining = new List<CrateTarget>();
+        foreach (var target in targets)
+        {
+            var platform = ManyLinuxImages.PlatformOf(target);
+            if (engine == null || engine.IsNativePlatform(platform))
+            {
+                remaining.Add(target);
+                continue;
+            }
+
+            Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Target = target, Message = $"Checking that this Docker engine ({engine.Architecture}) can run {platform} containers (qemu-user emulation) for {CrateTargets.Rid(target)}." });
+            var probe = await workbench.ProbePlatformAsync(platform, cancellationToken).ConfigureAwait(false);
+            if (probe.CanRun)
+            {
+                Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Target = target, Message = probe.Message + " Building under emulation is many times slower than natively." });
+                remaining.Add(target);
+                continue;
+            }
+
+            built[target] = TargetMatrix.NotBuildableResult(BuildMode.Docker, target, ManyLinuxImages.EmulationUnavailableReason(target, engine, probe), Array.Empty<CodeBrix.RustTools.Toolchain.InstallGuidance>());
+        }
+
+        return remaining;
+    }
+
+    private static CrateTargetResult FailedResult(CrateTarget target, string message) => new CrateTargetResult
+    {
+        Target = target,
+        Rid = CrateTargets.Rid(target),
+        Triple = CrateTargets.Triple(target),
+        Outcome = CrateTargetOutcome.Failed,
+        Provenance = ProvenanceOf(target),
+        Message = message,
+    };
+
     private static ArtifactProvenance ProvenanceOf(CrateTarget target)
         => CrateTargets.IsMacOS(target) ? ArtifactProvenance.DevelopmentBuild : ArtifactProvenance.Distributable;
 
-    private async Task<(IReadOnlyList<CrateTargetResult> Results, string Description)> BuildAllAsync(
+    private async Task<(IReadOnlyList<CrateTargetResult> Results, string Description)> BuildGroupAsync(
         DockerRustWorkbench workbench,
         DockerEngineInfo engine,
         StagedWorkspace workspace,
         BuiltCrate crate,
         CrateBuildRequest request,
         CrateBuilderContext context,
-        IReadOnlyList<CrateTarget> targets,
+        BuildGroup group,
         IDictionary<CrateTarget, BuildContribution> prepared,
         IProgress<CrateBuildProgress> progress,
         CancellationToken cancellationToken)
     {
         var installName = CargoOptionsFactory.MacOSInstallName(crate);
+        var targets = group.Targets;
 
         // The whole staging root goes into /work (so vendored path dependencies, the facade's
         // upstream crate and the WebGPU link folder come along, and the "{workspace}" token -
         // /work - names the same folder as on the host); cargo runs in the built manifest's
         // folder below it.
         var copyRoot = CopyRootFor(workspace, crate);
+        var sharedTarget = group.SharedTargetDirectory;
         CargoBuildOptions OptionsFor(CrateTarget target)
         {
             var options = CargoOptionsFactory.Create(request, crate, workspace.IsFacade);
@@ -237,27 +396,13 @@ internal sealed class DockerBuildDriver : IBuildDriver
                 options.MacOSInstallName = installName;
             }
 
-            return TargetOptions(options, prepared[target], target);
+            TargetOptions(options, prepared[target], target);
+            SharedCargoTarget.ApplyContainer(options, sharedTarget);
+            return options;
         }
 
         var manyLinux = request.LinuxBaseline == LinuxBaseline.ManyLinux;
-        BuildImageSpec imageSpec;
-        if (manyLinux)
-        {
-            var scratch = string.IsNullOrWhiteSpace(context.RunDirectory) ? context.ScratchRootDirectory : context.RunDirectory;
-            imageSpec = ManyLinuxImages.CreateSpec(CrateTarget.LinuxX64, Path.Combine(scratch, "manylinux-x86_64"));
-        }
-        else
-        {
-            imageSpec = new BuildImageSpec();
-        }
-
-        var crossTargets = targets.Select(CrateTargets.ToCrossTarget).ToList();
-        foreach (var crossTarget in crossTargets.Where(t => CrossTargetInfo.Get(t).RequiresLayer && !imageSpec.CrossTargets.Contains(t)))
-        {
-            imageSpec.CrossTargets.Add(crossTarget);
-        }
-
+        var imageSpec = group.ImageSpec;
         var retrievalOptions = new ArtifactRetrievalOptions
         {
             HostDirectory = Path.GetFullPath(request.OutputDirectory),
@@ -269,7 +414,10 @@ internal sealed class DockerBuildDriver : IBuildDriver
             Overwrite = true,
         };
 
-        Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Message = $"Building {string.Join(", ", targets.Select(CrateTargets.Rid))} in Docker ({request.LinuxBaseline})." });
+        var where = imageSpec.Platform != null && engine != null && !engine.IsNativePlatform(imageSpec.Platform)
+            ? $"Docker ({request.LinuxBaseline}, {imageSpec.Platform} under emulation)"
+            : $"Docker ({request.LinuxBaseline})";
+        Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Message = $"Building {string.Join(", ", targets.Select(CrateTargets.Rid))} in {where}." });
         var imageProgress = new SynchronousProgress<string>(line => Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Message = line }));
         var image = await workbench.EnsureImageAsync(imageSpec, imageProgress, cancellationToken).ConfigureAwait(false);
         var description = DescribeImage(image, engine);
@@ -277,11 +425,11 @@ internal sealed class DockerBuildDriver : IBuildDriver
         var verifiers = _verifiers.ToList();
         if (manyLinux)
         {
-            verifiers.Add(new GlibcFloorVerifier(ManyLinuxImages.X64GlibcFloor));
+            verifiers.Add(new GlibcFloorVerifier(ManyLinuxImages.GlibcFloor));
         }
 
         var results = new List<CrateTargetResult>();
-        var container = await workbench.StartContainerAsync(image, ContainerOptionsFor(request), cancellationToken).ConfigureAwait(false);
+        var container = await workbench.StartContainerAsync(image, ContainerOptionsFor(request, sharedTarget), cancellationToken).ConfigureAwait(false);
         try
         {
             Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Message = $"Copying {copyRoot} into the build container." });
@@ -289,14 +437,7 @@ internal sealed class DockerBuildDriver : IBuildDriver
             foreach (var target in targets)
             {
                 var crossTarget = CrateTargets.ToCrossTarget(target);
-                var result = new CrateTargetResult
-                {
-                    Target = target,
-                    Rid = CrateTargets.Rid(target),
-                    Triple = CrateTargets.Triple(target),
-                    Outcome = CrateTargetOutcome.Failed,
-                    Provenance = ProvenanceOf(target),
-                };
+                var result = FailedResult(target, null);
                 results.Add(result);
                 Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Target = target, Message = $"Building {result.Rid} ({result.Triple}) in Docker." });
                 var cargoProgress = new SynchronousProgress<CargoProgress>(p => Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Target = target, Message = p?.Message, CargoProgress = p }));
@@ -348,6 +489,12 @@ internal sealed class DockerBuildDriver : IBuildDriver
         }
         finally
         {
+            var ownership = await SharedCargoTarget.RestoreOwnershipAsync(workbench, container, sharedTarget).ConfigureAwait(false);
+            if (ownership != null)
+            {
+                context.Warnings.Add(ownership);
+            }
+
             if (!container.KeepOnDispose)
             {
                 try

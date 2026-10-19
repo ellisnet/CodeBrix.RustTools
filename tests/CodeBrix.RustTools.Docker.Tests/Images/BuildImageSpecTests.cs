@@ -100,4 +100,45 @@ public class BuildImageSpecTests
         //Assert
         resolved.ImageName.Should().Be("codebrix-rusttools-scratch");
     }
+
+    [Fact]
+    public void Platform_defaults_to_the_engine_s_own_and_Clone_copies_it()
+    {
+        //Arrange
+        var spec = new BuildImageSpec { Platform = "linux/arm64" };
+
+        //Act
+        var copy = spec.Clone();
+
+        //Assert
+        new BuildImageSpec().Platform.Should().BeNull();
+        copy.Platform.Should().Be("linux/arm64");
+    }
+
+    [Fact]
+    public void WithDefaults_normalizes_the_platform_and_rejects_a_list()
+    {
+        //Act
+        var resolved = new BuildImageSpec { Platform = " Linux/RISCV64 " }.WithDefaults(new DockerRustWorkbenchOptions());
+
+        //Assert
+        resolved.Platform.Should().Be("linux/riscv64");
+        new BuildImageSpec { Platform = " " }.WithDefaults(new DockerRustWorkbenchOptions()).Platform.Should().BeNull();
+        ((System.Action)(() => new BuildImageSpec { Platform = "linux/amd64,linux/arm64" }.WithDefaults(new DockerRustWorkbenchOptions()))).Should().Throw<System.ArgumentException>();
+    }
+
+    [Fact]
+    public void the_linux_target_of_the_image_platform_needs_no_cross_layer()
+    {
+        //Arrange
+        var spec = new BuildImageSpec { Platform = "linux/arm64", CrossTargets = { CrossTarget.LinuxArm64, CrossTarget.LinuxX64 } };
+        var engine = new DockerEngineInfo { Architecture = "x86_64" }.ForContainerPlatform(spec.Platform);
+
+        //Act
+        var withoutNative = spec.WithoutNativeLinuxTargets(engine);
+
+        //Assert
+        withoutNative.CrossTargets.Should().Equal(CrossTarget.LinuxX64);
+        withoutNative.Platform.Should().Be("linux/arm64");
+    }
 }

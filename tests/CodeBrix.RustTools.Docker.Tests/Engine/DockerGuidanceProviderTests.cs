@@ -135,4 +135,33 @@ public class DockerGuidanceProviderTests
         text.Should().Contain("    sudo systemctl start docker");
         text.Should().Contain("More information: https://");
     }
+
+    [Theory]
+    [InlineData(OperatingSystemKind.DebianLinux)]
+    [InlineData(OperatingSystemKind.OtherLinux)]
+    [InlineData(OperatingSystemKind.Windows)]
+    [InlineData(OperatingSystemKind.MacOS)]
+    public void GetGuidance_explains_the_qemu_user_emulation_of_foreign_platforms(OperatingSystemKind os)
+    {
+        //Act
+        var guidance = DockerGuidanceProvider.GetGuidance(DockerGuidanceTopic.EnableForeignPlatforms, os);
+
+        //Assert
+        guidance.Explanation.Should().Contain("linux/arm64");
+        guidance.Explanation.Should().Contain("emulation");
+        guidance.DocumentationUrl.Should().Be("https://docs.docker.com/build/building/multi-platform/");
+    }
+
+    [Fact]
+    public void GetGuidance_installs_qemu_user_static_and_binfmt_support_on_debian()
+    {
+        //Act
+        var guidance = DockerGuidanceProvider.GetGuidance(DockerGuidanceTopic.EnableForeignPlatforms, OperatingSystemKind.DebianLinux);
+
+        //Assert
+        guidance.Commands[0].Should().Be("sudo apt install qemu-user-static binfmt-support");
+        guidance.RequiresAdministrator.Should().BeTrue();
+        guidance.Explanation.Should().Contain("binfmt_misc");
+        guidance.Explanation.Should().Contain("exec format error");
+    }
 }

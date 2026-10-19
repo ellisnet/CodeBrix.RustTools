@@ -53,6 +53,20 @@ public class WrapperOptionsTests
     }
 
     [Fact]
+    public void a_request_copy_keeps_the_field_accessor_switch()
+    {
+        //Arrange
+        var request = new CrateBuildRequest { Wrapper = new WrapperOptions { AssemblyName = "A", RootNamespace = "A", GenerateFieldAccessors = false } };
+
+        //Act
+        var copy = request.Clone();
+
+        //Assert
+        copy.Wrapper.Should().NotBeSameAs(request.Wrapper);
+        copy.Wrapper.GenerateFieldAccessors.Should().BeFalse();
+    }
+
+    [Fact]
     public void defaults_are_a_plain_class_library_with_an_mit_package_license()
     {
         //Act
@@ -65,6 +79,7 @@ public class WrapperOptionsTests
         options.Plan.Should().BeNull();
         options.OutputDirectory.Should().BeNull();
         options.GenerateSmokeTests.Should().BeFalse();
+        options.GenerateFieldAccessors.Should().BeTrue();
         packaging.LicenseExpression.Should().Be("MIT");
         packaging.Tags.Should().BeEmpty();
         plan.IncludeTypes.Should().BeEmpty();

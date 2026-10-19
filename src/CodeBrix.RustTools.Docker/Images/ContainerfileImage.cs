@@ -18,8 +18,10 @@ internal static class ContainerfileImage
 
     /// <summary>
     /// The first 16 lowercase hexadecimal digits of a SHA-256 over the Containerfile's bytes, the
-    /// build arguments (sorted by name) and every file of the build context (sorted by relative
-    /// path; a symbolic link counts by its target, and links to folders are not followed).
+    /// build arguments (sorted by name), the platform when <see cref="BuildImageSpec.Platform"/>
+    /// is set (a spec without one keeps the hash it always had) and every file of the build
+    /// context (sorted by relative path; a symbolic link counts by its target, and links to
+    /// folders are not followed).
     /// </summary>
     /// <param name="spec">A spec whose <see cref="BuildImageSpec.Containerfile"/> is set and
     /// valid.</param>
@@ -40,6 +42,12 @@ internal static class ContainerfileImage
             {
                 text.Append("arg=").Append(pair.Key).Append('=').Append(pair.Value ?? string.Empty).Append('\n');
             }
+        }
+
+        var platform = Engine.DockerPlatforms.Normalize(spec.Platform);
+        if (platform != null)
+        {
+            text.Append("platform=").Append(platform).Append('\n');
         }
 
         var context = spec.ResolveContainerfileContext();

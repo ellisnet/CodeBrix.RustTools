@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeBrix.RustTools.Docker;
@@ -65,6 +66,18 @@ public sealed class DockerEndToEndFixture : IAsyncLifetime
         if (!string.Equals(Engine.Architecture, "x86_64", StringComparison.OrdinalIgnoreCase))
         {
             Assert.Skip("The end-to-end Docker tests build linux-x64 natively and need an x86-64 engine; this engine is " + Engine.Architecture + ".");
+        }
+    }
+
+    /// <summary>Skips the test unless the host has the qemu-user binfmt handler
+    /// <paramref name="handler"/> (for example <c>qemu-aarch64</c>) that runs the foreign
+    /// platform's images on this x86-64 engine.</summary>
+    public static void SkipUnlessBinfmtHandler(string handler)
+    {
+        var path = Path.Combine("/proc/sys/fs/binfmt_misc", handler);
+        if (!File.Exists(path))
+        {
+            Assert.Skip($"No qemu-user binfmt handler {handler} ({path} is absent), so that platform's images cannot run on this engine.");
         }
     }
 }

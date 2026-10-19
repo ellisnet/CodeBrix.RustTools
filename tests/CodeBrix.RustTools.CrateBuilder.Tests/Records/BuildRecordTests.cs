@@ -44,6 +44,25 @@ public class BuildRecordTests
     };
 
     [Fact]
+    public void The_source_says_whether_a_clone_was_reused_and_false_is_written_too()
+    {
+        //Arrange
+        var reused = Sample();
+        reused.Source.CloneReused = true;
+
+        //Act
+        var reusedJson = reused.ToJson();
+        var freshJson = Sample().ToJson();
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<CrateSourceIdentity>(System.Text.Json.JsonDocument.Parse(reusedJson).RootElement.GetProperty("source").GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        //Assert
+        reusedJson.Should().Contain("\"cloneReused\": true");
+        freshJson.Should().Contain("\"cloneReused\": false", "the field is always written, so a reader never has to guess");
+        loaded.CloneReused.Should().BeTrue();
+        new CrateSourceIdentity().CloneReused.Should().BeFalse();
+    }
+
+    [Fact]
     public void Save_and_Load_round_trip()
     {
         //Arrange

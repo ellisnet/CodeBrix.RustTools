@@ -51,6 +51,22 @@ public sealed class CrateBuilderOptions
     /// the difference is noted.</summary>
     public string WebGpuNativePackageDirectory { get; set; }
 
+    /// <summary>
+    /// A cargo target folder shared by every build of this builder (and by other builders
+    /// given the same folder), so dependencies compiled once are reused by later builds;
+    /// <c>null</c> (the default) = each run builds in its own folder under the scratch root,
+    /// deleted with the run. Every cargo run CrateBuilder issues uses a sub-folder: <c>host/</c>
+    /// for host-mode builds of the crate and of a generated facade (shared by both),
+    /// <c>docker/</c> for Docker-mode builds (bind-mounted into the build container, so the
+    /// folder must be on the machine the engine runs on and shared with it; the files the
+    /// container writes are handed back to the folder's owner afterwards), and
+    /// <c>api-extractor/</c> / <c>api-extractor-docker/</c> for the API extractor tool. It
+    /// replaces a <c>CARGO_TARGET_DIR</c> in the environment. A relative path is resolved
+    /// against the current folder; the folder is created when missing and never
+    /// deleted.
+    /// </summary>
+    public string CargoTargetDirectory { get; set; }
+
     /// <summary>The scratch root that applies: <see cref="ScratchRootDirectory"/>, else the
     /// default under the system temp folder.</summary>
     public string EffectiveScratchRootDirectory

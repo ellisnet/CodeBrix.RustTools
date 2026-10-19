@@ -56,10 +56,10 @@ public class ApiExtractorDockerTests : IClassFixture<ExtractionDockerFixture>
         _fixture = fixture;
     }
 
-    private async Task<(CrateApiModel Model, string ScratchRoot)> ExtractAsync(ApiExtractorDockerRoute route, SampleSandbox scratch)
+    private async Task<(CrateApiModel Model, string ScratchRoot)> ExtractAsync(ApiExtractorDockerRoute route, SampleSandbox scratch, string cargoTargetDirectory = null)
     {
         using var sandbox = SampleSandbox.FromSample(15);
-        var context = ExtractionTestContext.Create(scratch.Directory, sandbox.CreateDirectory("run"), docker: _fixture.Workbench);
+        var context = ExtractionTestContext.Create(scratch.Directory, sandbox.CreateDirectory("run"), docker: _fixture.Workbench, cargoTargetDirectory: cargoTargetDirectory);
         var extractor = new ApiExtractor(new ApiExtractorOptions { PreferHostToolchain = false, DockerRoute = route });
         var model = await extractor.ExtractAsync(ExtractionTestContext.Workspace(sandbox.Directory, "datacrate"), new CrateBuildRequest { Mode = BuildMode.Docker }, context, TestContext.Current.CancellationToken);
         return (model, scratch.Directory);
@@ -106,6 +106,43 @@ public class ApiExtractorDockerTests : IClassFixture<ExtractionDockerFixture>
         var toolDirectory = ApiExtractorToolSource.GetToolDirectory(scratchRoot);
         File.Exists(Path.Combine(toolDirectory, "docker-" + hostRid, ApiExtractorToolSource.ToolName)).Should().BeTrue();
         Directory.Exists(Path.Combine(toolDirectory, "target")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task live_docker_builds_the_retrieved_tool_in_a_shared_cargo_target_folder_the_host_user_owns()
+    {
+        //Arrange
+        await Capabilities.SkipIfDockerUnavailableAsync();
+        var engine = await _fixture.Workbench.CheckEngineAsync(TestContext.Current.CancellationToken);
+        var hostRid = ApiExtractor.HostLinuxRuntimeIdentifier();
+        if (hostRid == null || hostRid != engine.NativeLinuxRuntimeIdentifier)
+        {
+            Assert.Skip($"Needs a Linux host of the engine's architecture (host {hostRid ?? "not Linux"}, engine {engine.NativeLinuxRuntimeIdentifier}).");
+        }
+
+        using var scratch = SampleSandbox.CreateEmpty();
+        var shared = Path.Combine(scratch.Directory, "shared-target");
+        var hash = ApiExtractorToolSource.ContentHash.Substring(0, ApiExtractorToolSource.FolderHashLength);
+
+        //Act
+        var (model, scratchRoot) = await ExtractAsync(ApiExtractorDockerRoute.RetrieveAndRunOnHost, scratch, shared);
+        var toolInShared = File.Exists(Path.Combine(shared, "api-extractor-docker", hash, "release", ApiExtractorToolSource.ToolName));
+        Exception deleteError = null;
+        try
+        {
+            Directory.Delete(shared, true);
+        }
+        catch (Exception ex)
+        {
+            deleteError = ex;
+        }
+
+        //Assert
+        model.Crate.Name.Should().Be("datacrate");
+        model.Functions.Should().HaveCount(19);
+        File.Exists(Path.Combine(ApiExtractorToolSource.GetToolDirectory(scratchRoot), "docker-" + hostRid, ApiExtractorToolSource.ToolName)).Should().BeTrue("the executable is retrieved as without the option");
+        toolInShared.Should().BeTrue("cargo in the container built into the bind-mounted api-extractor-docker/<hash>/ folder");
+        deleteError.Should().BeNull("the files the container wrote were handed back to the folder's owner");
     }
 
     [Fact]

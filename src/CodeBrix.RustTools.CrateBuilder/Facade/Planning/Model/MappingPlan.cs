@@ -74,6 +74,12 @@ internal sealed class MappingPlan
     /// <summary>Hand-written exports from the WrapPlan, ordinal by RustPath.</summary>
     public IList<FacadeOverrideEntry> Overrides { get; set; } = new List<FacadeOverrideEntry>();
 
+    /// <summary><c>null</c> when the getters and setters of objects' public fields were
+    /// generated (the default); otherwise the number of them that were NOT generated because
+    /// <see cref="WrapperOptions.GenerateFieldAccessors"/> is false (counted over the objects
+    /// the wrapper has).</summary>
+    public int? FieldAccessorsOmitted { get; set; }
+
     /// <summary>ADDED (WP6): the WrapPlan's free-text notes, copied into the wrap report;
     /// <c>null</c> when there are none.</summary>
     public string WrapPlanNotes { get; set; }

@@ -80,6 +80,33 @@ public sealed class BuildImageSpec
     public bool RefreshBaseImage { get; set; }
 
     /// <summary>
+    /// The Docker platform the image is for, for example <c>linux/arm64</c> or
+    /// <c>linux/riscv64</c> (<see cref="DockerPlatforms"/>). <c>null</c> (the default) is the
+    /// engine's own platform, exactly as before the property existed. ONE platform only (a
+    /// comma-separated list is rejected with <see cref="ArgumentException"/>).
+    /// <para>
+    /// The platform is passed to the base image pull (so that variant of a multi-platform image
+    /// is present), to the image build of both routes (the generated Dockerfile and
+    /// <see cref="Containerfile"/>: <c>docker build --platform</c>), and is part of the image's
+    /// identity: the derived image's tag hash and the Containerfile image's hash include it, so
+    /// an arm64 image never reuses the x86-64 image of the same spec (a spec without a platform
+    /// keeps the hash it always had). <see cref="RustBuildImage.Platform"/> records it, and a
+    /// build container started from the image runs on it unless
+    /// <see cref="Containers.BuildContainerOptions.Platform"/> says otherwise.
+    /// </para>
+    /// <para>
+    /// A platform that is not the engine's own runs under emulation, and its Linux target is the
+    /// container's native target (no cross layer, no <c>--target</c>): an arm64 image builds
+    /// <see cref="CrossTarget.LinuxArm64"/> natively under qemu-user. PREREQUISITE: the engine's
+    /// host can execute the architecture - on Linux a qemu-user binfmt handler for it
+    /// (<c>/proc/sys/fs/binfmt_misc/qemu-aarch64</c>, <c>qemu-riscv64</c>); check it with
+    /// <see cref="DockerRustWorkbench.ProbePlatformAsync"/>. Emulated builds are many times
+    /// slower than native ones.
+    /// </para>
+    /// </summary>
+    public string Platform { get; set; }
+
+    /// <summary>
     /// A Containerfile (Dockerfile) on this machine to build the base image from, instead of
     /// pulling <see cref="BaseImage"/>: "bring your own image". Use it for a base the generated
     /// layers cannot make - a non-Debian distribution such as manylinux / AlmaLinux (whose
@@ -165,6 +192,7 @@ public sealed class BuildImageSpec
         ContainerfileBuildArgs = ContainerfileBuildArgs == null
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : new Dictionary<string, string>(ContainerfileBuildArgs, StringComparer.Ordinal),
+        Platform = Platform,
     };
 
     /// <summary>
@@ -189,6 +217,7 @@ public sealed class BuildImageSpec
             copy.ImageName = options.BuildImageRepository;
         }
 
+        copy.Platform = DockerPlatforms.Normalize(copy.Platform);
         return copy;
     }
 

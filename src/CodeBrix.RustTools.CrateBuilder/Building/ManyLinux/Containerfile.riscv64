@@ -1,0 +1,64 @@
+# =============================================================================================
+# Containerfile.riscv64 - CodeBrix.RustTools.CrateBuilder's manylinux build image for linux-riscv64
+# =============================================================================================
+#
+# LinuxBaseline.ManyLinux builds the linux-riscv64 library in this image instead of
+# cross-compiling it in the official rust image (Debian), so the result needs only glibc 2.39
+# (Ubuntu 24.04+, Debian 13+ - in practice every riscv64 distribution is newer than that)
+# instead of the glibc of a current Debian release.
+#
+# Base: the digest-pinned manylinux_2_39_riscv64 image (glibc 2.39), the same image and digest
+# the CodeBrix native libraries are built on. quay.io/pypa publishes no older manylinux
+# baseline for riscv64 (there is no manylinux_2_28_riscv64), so 2.39 is this target's floor.
+# The FROM line resolves to the digest, so a retag upstream cannot change the base under a
+# rebuild.
+#
+# PLATFORM: this is a linux/riscv64 image. On an x86-64 Docker engine it is built and run under
+# qemu-user emulation (CodeBrix.RustTools.Docker's BuildImageSpec.Platform = linux/riscv64),
+# which needs a qemu-user binfmt handler for riscv64 on the engine's host
+# (/proc/sys/fs/binfmt_misc/qemu-riscv64). Everything below - rustup, and later cargo - then
+# runs emulated, many times slower than natively.
+#
+# Added: Rust, installed with rustup-init at a pinned rustup release (the download is checked
+# against a pinned SHA-256), with the toolchain named by RUST_VERSION and the minimal profile,
+# into the official rust image's layout (RUSTUP_HOME=/usr/local/rustup,
+# CARGO_HOME=/usr/local/cargo) so CodeBrix.RustTools.Docker's cargo cache volumes mount where
+# cargo looks for them. Nothing else is installed.
+#
+# CodeBrix.RustTools.CrateBuilder passes every ARG below as a build argument; the defaults
+# only keep a hand-run `docker build --platform linux/riscv64 -f Containerfile.riscv64 .`
+# working.
+# =============================================================================================
+
+ARG BASE_IMAGE=quay.io/pypa/manylinux_2_39_riscv64@sha256:04b3acc69a6cebb10ac1252587d202acce6445d91c783d3f92229bb2b2483069
+FROM ${BASE_IMAGE}
+
+ARG RUST_VERSION=1.99.0
+ARG RUSTUP_VERSION=1.29.1
+ARG RUSTUP_INIT_SHA256=e94134ed99fed1a3a1f13a3bf0a05d616fc1c2496ec0b557aaee4856cd34b2f2
+ARG RUSTUP_HOST=riscv64gc-unknown-linux-gnu
+
+LABEL org.opencontainers.image.title="codebrix-cratebuilder-manylinux-riscv64"
+LABEL org.opencontainers.image.description="CodeBrix.RustTools.CrateBuilder linux-riscv64 build image: manylinux_2_39_riscv64 + rustup + Rust"
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN set -eux; \
+    url="https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_HOST}/rustup-init"; \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/rustup-init "$url"; \
+    echo "${RUSTUP_INIT_SHA256}  /tmp/rustup-init" | sha256sum -c -; \
+    chmod +x /tmp/rustup-init; \
+    /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain "${RUST_VERSION}" --default-host "${RUSTUP_HOST}"; \
+    rm -f /tmp/rustup-init; \
+    chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}"; \
+    rustup --version; \
+    cargo --version; \
+    rustc --version; \
+    cc --version | sed -n 1p; \
+    ldd --version | sed -n 1p; \
+    command -v setsid
+
+WORKDIR /work
+ENV CARGO_TERM_COLOR=never RUSTUP_AUTO_INSTALL=0

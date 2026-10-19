@@ -32,6 +32,17 @@ public sealed class WrapperOptions
     public bool GenerateSmokeTests { get; set; }
 
     /// <summary>
+    /// Give every public field of a wrapped object (a non-Copy struct) a getter
+    /// (<c>Get&lt;Field&gt;()</c>) and a setter (<c>Set&lt;Field&gt;(value)</c>). Default true.
+    /// Set it to false for data-heavy crates, where these per-field accessors are most of the
+    /// wrapper: the constructor from the fields (or <c>FromFields</c>), the
+    /// <c>Variant()</c> name and per-variant constructors of data-carrying enums, the crate's
+    /// own methods and Copy structs (record structs with their fields) are generated either
+    /// way. WRAP-REPORT.txt says how many accessors were left out.
+    /// </summary>
+    public bool GenerateFieldAccessors { get; set; } = true;
+
+    /// <summary>
     /// Checks the settings.
     /// </summary>
     /// <exception cref="ArgumentException">A required setting is missing, the assembly name
@@ -71,6 +82,7 @@ public sealed class WrapperOptions
         Plan = Plan?.Clone(),
         OutputDirectory = OutputDirectory,
         GenerateSmokeTests = GenerateSmokeTests,
+        GenerateFieldAccessors = GenerateFieldAccessors,
     };
 
     internal static bool IsDottedIdentifier(string text)

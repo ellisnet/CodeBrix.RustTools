@@ -65,6 +65,8 @@ public class GitEndToEndTests
         first.Source.Commit.Should().MatchRegex("^[0-9a-f]{40}$");
         first.Source.ManifestPath.Should().Be(ManifestPath);
         first.Record.Source.Commit.Should().Be(first.Source.Commit);
+        first.Source.CloneReused.Should().BeFalse("the first build cloned into the empty folder");
+        first.Record.Source.CloneReused.Should().BeFalse();
         cloneAfterFirst.Should().BeTrue("the clone stays when CleanUpAfterBuild is false");
         firstReports.Should().Contain(p => p.Stage == CrateBuildStage.ResolvingSource && p.Message.StartsWith("Cloning " + RepositoryUrl, StringComparison.Ordinal));
         EndToEndKit.Lines(output).Should().Equal("add(20,22)=42");
@@ -73,6 +75,9 @@ public class GitEndToEndTests
         secondReports.Should().Contain(p => p.Stage == CrateBuildStage.ResolvingSource && p.Message.StartsWith("Reusing the clone in", StringComparison.Ordinal));
         secondReports.Should().NotContain(p => p.Stage == CrateBuildStage.ResolvingSource && p.Message.StartsWith("Cloning ", StringComparison.Ordinal));
         second.Source.Commit.Should().Be(first.Source.Commit);
+        second.Source.CloneReused.Should().BeTrue("the second build fetched into the clone the first one made");
+        second.Record.Source.CloneReused.Should().BeTrue();
+        File.ReadAllText(second.BuildRecordPath).Should().Contain("\"cloneReused\": true");
         Directory.Exists(cloneDirectory).Should().BeFalse("CleanUpAfterBuild deletes the clone folder");
         File.Exists(Path.Combine(second.Wrapper.ProjectDirectory, "runtimes", CrateTargets.Rid(target), "native", CrateTargets.NativeFileName(target, "test_project_13"))).Should().BeTrue();
         EndToEndKit.Log(nameof(a_crate_in_a_public_github_repository_is_cloned_built_wrapped_then_the_clone_is_reused_and_cleaned_up), stopwatch);

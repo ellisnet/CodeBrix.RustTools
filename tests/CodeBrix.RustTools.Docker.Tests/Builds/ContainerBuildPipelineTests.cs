@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using CodeBrix.RustTools.Building;
 using CodeBrix.RustTools.Docker.Builds;
+using CodeBrix.RustTools.Docker.Containers;
 using CodeBrix.RustTools.Docker.Engine;
 using CodeBrix.RustTools.Docker.Images;
 using SilverAssertions;
@@ -167,5 +168,45 @@ public class ContainerBuildPipelineTests
         mac.Environment.ContainsKey("NATIVE").Should().BeFalse();
         windows.Should().BeSameAs(options);
         options.Environment["SHARED"].Should().Be("1");
+    }
+
+    [Fact]
+    public void a_request_for_another_platform_builds_its_linux_target_natively_in_that_platform_s_container()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest
+        {
+            ProjectDirectory = "/a",
+            Targets = new List<CrossTarget> { CrossTarget.LinuxNative, CrossTarget.LinuxArm64, CrossTarget.LinuxX64 },
+            ImageSpec = new BuildImageSpec { Platform = "linux/arm64" },
+        };
+
+        //Act
+        var platform = ContainerBuildPipeline.PlatformFor(request);
+        var buildEngine = X64Engine.ForContainerPlatform(platform);
+        var spec = ContainerBuildPipeline.ImageSpecFor(request, buildEngine);
+        var targets = ContainerBuildPipeline.BuildTargetsFor(request.Targets, buildEngine);
+
+        //Assert
+        platform.Should().Be("linux/arm64");
+        spec.Platform.Should().Be("linux/arm64");
+        spec.CrossTargets.Should().Equal(CrossTarget.LinuxX64);
+        targets.Should().Equal(CrossTarget.LinuxArm64, CrossTarget.LinuxX64);
+    }
+
+    [Fact]
+    public void PlatformFor_takes_the_container_options_before_the_image_spec()
+    {
+        //Arrange
+        var request = new ContainerBuildRequest
+        {
+            ProjectDirectory = "/a",
+            ImageSpec = new BuildImageSpec { Platform = "linux/arm64" },
+            ContainerOptions = new BuildContainerOptions { Platform = "linux/riscv64" },
+        };
+
+        //Assert
+        ContainerBuildPipeline.PlatformFor(request).Should().Be("linux/riscv64");
+        ContainerBuildPipeline.PlatformFor(new ContainerBuildRequest { ProjectDirectory = "/a" }).Should().BeNull();
     }
 }

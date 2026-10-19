@@ -24,12 +24,18 @@ public sealed class RustBuildImage
     /// <summary>The spec the image was prepared from, with the defaults filled in.</summary>
     public BuildImageSpec Spec { get; init; }
 
+    /// <summary>The Docker platform the image was prepared for (<see cref="BuildImageSpec.Platform"/>,
+    /// normalized, for example <c>linux/arm64</c>), or <c>null</c> for the engine's own platform.
+    /// Build containers started from the image run on this platform unless
+    /// <see cref="Containers.BuildContainerOptions.Platform"/> names another.</summary>
+    public string Platform { get; init; }
+
     /// <summary>The Dockerfile text generated from <see cref="Spec"/> (also produced for a base
     /// image, where it documents what the image would contain).</summary>
     public string Dockerfile { get; init; } = string.Empty;
 
     /// <summary>The hash of <see cref="Dockerfile"/> (see
-    /// <see cref="DockerfileGenerator.ComputeSpecHash"/>).</summary>
+    /// <see cref="DockerfileGenerator.ComputeSpecHash(string, string)"/>; the platform counts when it is set).</summary>
     public string SpecHash { get; init; } = string.Empty;
 
     /// <summary>The base image reference, for example <c>rust:latest</c>.</summary>

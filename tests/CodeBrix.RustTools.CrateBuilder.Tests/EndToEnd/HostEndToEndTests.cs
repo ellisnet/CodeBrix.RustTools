@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 using CodeBrix.RustTools.CrateBuilder.Building.Verification;
+using CodeBrix.RustTools.CrateBuilder.Facade.Extraction;
 using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
 using CodeBrix.RustTools.CrateBuilder.Tests.Facade.Rendering.Fixtures;
 using CodeBrix.RustTools.CrateBuilder.Tests.Helpers;
@@ -615,6 +616,57 @@ public class HostEndToEndTests
     }
 
     /// <summary>The consumer app of the datacrate wrapper (sample 15): every shape once.</summary>
+    [Fact]
+    public async Task a_shared_cargo_target_directory_is_used_by_every_cargo_run_and_reused_by_the_next_build()
+    {
+        //Arrange
+        await Capabilities.SkipIfCargoMissingAsync();
+        var target = EndToEndKit.HostTargetOrSkip();
+        var triple = CrateTargets.Triple(target);
+        var stopwatch = Stopwatch.StartNew();
+        using var sandbox = SampleSandbox.FromSample(15);
+        var root = Path.GetDirectoryName(sandbox.Directory);
+        var shared = Path.Combine(root, "shared-target");
+        var hostFolder = Path.Combine(shared, "host");
+        var extractorFolder = Path.Combine(shared, "api-extractor", ApiExtractorToolSource.ContentHash.Substring(0, ApiExtractorToolSource.FolderHashLength));
+        var built = Path.Combine(hostFolder, triple, "release", CrateTargets.NativeFileName(target, "datacrate"));
+        var tool = Path.Combine(extractorFolder, "release", OperatingSystem.IsWindows() ? ApiExtractorToolSource.ToolName + ".exe" : ApiExtractorToolSource.ToolName);
+        CrateBuildRequest RequestFor(string output)
+        {
+            var request = Request(Path.Combine(sandbox.Directory, "Cargo.toml"), Path.Combine(root, output, "native"), target);
+            request.Wrapper = new WrapperOptions { AssemblyName = "E2E.SharedTarget", RootNamespace = "E2E.SharedTarget" };
+            return request;
+        }
+
+        using var builder = new CrateBuilder(new CrateBuilderOptions { ScratchRootDirectory = EndToEndKit.ScratchRoot, CargoTargetDirectory = shared });
+
+        //Act
+        var first = await builder.BuildAsync(RequestFor("first"), cancellationToken: TestContext.Current.CancellationToken);
+        ShouldSucceed(first);
+        var builtAfterFirst = File.Exists(built);
+        var toolAfterFirst = File.Exists(tool) ? File.GetLastWriteTimeUtc(tool) : DateTime.MinValue;
+        var second = await builder.BuildAsync(RequestFor("second"), cancellationToken: TestContext.Current.CancellationToken);
+
+        //Assert
+        builtAfterFirst.Should().BeTrue("the first build's cargo output is in the shared folder: " + built);
+        toolAfterFirst.Should().NotBe(DateTime.MinValue, "the API extractor tool was built into " + extractorFolder);
+        ShouldSucceed(second);
+        File.Exists(built).Should().BeTrue();
+        File.Exists(Path.Combine(hostFolder, "CACHEDIR.TAG")).Should().BeTrue("cargo marks the folder as its target folder");
+        File.GetLastWriteTimeUtc(tool).Should().Be(toolAfterFirst, "the second build reuses the tool built in the shared folder");
+        foreach (var result in new[] { first, second })
+        {
+            var files = result.Targets.Single().CargoResult.Artifacts.SelectMany(a => a.Filenames).ToList();
+            files.Should().NotBeEmpty();
+            files.Should().OnlyContain(f => Path.GetFullPath(f).StartsWith(hostFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal), "every cargo output of the build lands in the shared host/ folder");
+            result.Source.CloneReused.Should().BeFalse("a local source is never a reused clone");
+            File.ReadAllText(result.BuildRecordPath).Should().Contain("\"cloneReused\": false");
+        }
+
+        File.Exists(Path.Combine(root, "second", "native", "runtimes", CrateTargets.Rid(target), "native", CrateTargets.NativeFileName(target, "datacrate"))).Should().BeTrue();
+        EndToEndKit.Log(nameof(a_shared_cargo_target_directory_is_used_by_every_cargo_run_and_reused_by_the_next_build), stopwatch);
+    }
+
     private const string DatacrateProgram = """
         using System;
         using System.Globalization;

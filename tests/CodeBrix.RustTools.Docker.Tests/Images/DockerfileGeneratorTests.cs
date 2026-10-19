@@ -594,4 +594,41 @@ public class DockerfileGeneratorTests
         //Assert
         reference.Should().Be("codebrix-rusttools-scratch:" + hash);
     }
+
+    [Fact]
+    public void ComputeSpecHash_keeps_the_old_hash_without_a_platform_and_gives_each_platform_its_own()
+    {
+        //Arrange
+        var text = DockerfileGenerator.Generate(new BuildImageSpec { BaseImage = "rust", Tag = "latest", AptPackages = { "cmake" } });
+
+        //Act
+        var none = DockerfileGenerator.ComputeSpecHash(text, null);
+        var arm64 = DockerfileGenerator.ComputeSpecHash(text, "linux/arm64");
+
+        //Assert
+        none.Should().Be(DockerfileGenerator.ComputeSpecHash(text));
+        DockerfileGenerator.ComputeSpecHash(text, "  ").Should().Be(none);
+        arm64.Should().MatchRegex("^[0-9a-f]{16}$");
+        arm64.Should().NotBe(none);
+        DockerfileGenerator.ComputeSpecHash(text, "Linux/ARM64").Should().Be(arm64);
+        DockerfileGenerator.ComputeSpecHash(text, "linux/riscv64").Should().NotBe(arm64);
+    }
+
+    [Fact]
+    public void DerivedImageReference_differs_per_platform()
+    {
+        //Arrange
+        var spec = new BuildImageSpec { AptPackages = { "cmake" } };
+        var arm64 = spec.Clone();
+        arm64.Platform = "linux/arm64";
+
+        //Act
+        var x64Reference = DockerfileGenerator.DerivedImageReference(spec);
+        var arm64Reference = DockerfileGenerator.DerivedImageReference(arm64);
+
+        //Assert
+        arm64Reference.Should().NotBe(x64Reference);
+        x64Reference.Should().Be("codebrix-rusttools-docker:" + DockerfileGenerator.ComputeSpecHash(DockerfileGenerator.Generate(spec)));
+        DockerfileGenerator.Generate(arm64).Should().Be(DockerfileGenerator.Generate(spec), "the platform goes to docker build --platform, not into the Dockerfile");
+    }
 }

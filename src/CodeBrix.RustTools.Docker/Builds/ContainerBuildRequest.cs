@@ -65,12 +65,17 @@ public sealed class ContainerBuildRequest
     /// <summary>
     /// The build image; <c>null</c> uses the base image. The layers the
     /// <see cref="Targets"/> need (Windows, Android, macOS, a Linux target of another
-    /// architecture) are added automatically.
+    /// architecture) are added automatically. Its <see cref="BuildImageSpec.Platform"/> builds
+    /// the image - and, unless <see cref="ContainerOptions"/> names another, runs the container -
+    /// on that platform; "another architecture" and <see cref="CrossTarget.LinuxNative"/> are
+    /// then relative to the platform, not to the engine.
     /// </summary>
     public BuildImageSpec ImageSpec { get; set; }
 
     /// <summary>
-    /// The build container's settings; <c>null</c> uses the defaults.
+    /// The build container's settings; <c>null</c> uses the defaults. Its
+    /// <see cref="BuildContainerOptions.Platform"/>, when set, wins over the image spec's
+    /// platform for the container.
     /// </summary>
     public BuildContainerOptions ContainerOptions { get; set; }
 
@@ -209,6 +214,9 @@ public sealed class ContainerBuildRequest
         {
             throw new ArgumentException("AndroidApiLevel must be 21 or later (64-bit Android targets start there).", "request");
         }
+
+        Engine.DockerPlatforms.Normalize(ImageSpec?.Platform);
+        Engine.DockerPlatforms.Normalize(ContainerOptions?.Platform);
 
         if (!string.IsNullOrWhiteSpace(CopyRootDirectory) && string.IsNullOrWhiteSpace(ProjectDirectory))
         {

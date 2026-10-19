@@ -1,0 +1,62 @@
+# =============================================================================================
+# Containerfile.aarch64 - CodeBrix.RustTools.CrateBuilder's manylinux build image for linux-arm64
+# =============================================================================================
+#
+# LinuxBaseline.ManyLinux builds the linux-arm64 library in this image instead of
+# cross-compiling it in the official rust image (Debian), so the result needs only glibc 2.28
+# (every 64-bit Raspberry Pi OS, Ubuntu 20.04+, Debian 10+, RHEL 8+) instead of the glibc of a
+# current Debian release.
+#
+# Base: the digest-pinned manylinux_2_28_aarch64 image (AlmaLinux 8, gcc toolset, glibc 2.28),
+# the same image and digest the CodeBrix native libraries are built on. The FROM line resolves
+# to the digest, so a retag upstream cannot change the base under a rebuild.
+#
+# PLATFORM: this is a linux/arm64 image. On an x86-64 Docker engine it is built and run under
+# qemu-user emulation (CodeBrix.RustTools.Docker's BuildImageSpec.Platform = linux/arm64), which
+# needs a qemu-user binfmt handler for aarch64 on the engine's host
+# (/proc/sys/fs/binfmt_misc/qemu-aarch64). Everything below - rustup, and later cargo - then
+# runs emulated, many times slower than natively.
+#
+# Added: Rust, installed with rustup-init at a pinned rustup release (the download is checked
+# against a pinned SHA-256), with the toolchain named by RUST_VERSION and the minimal profile,
+# into the official rust image's layout (RUSTUP_HOME=/usr/local/rustup,
+# CARGO_HOME=/usr/local/cargo) so CodeBrix.RustTools.Docker's cargo cache volumes mount where
+# cargo looks for them. Nothing else is installed.
+#
+# CodeBrix.RustTools.CrateBuilder passes every ARG below as a build argument; the defaults
+# only keep a hand-run `docker build --platform linux/arm64 -f Containerfile.aarch64 .`
+# working.
+# =============================================================================================
+
+ARG BASE_IMAGE=quay.io/pypa/manylinux_2_28_aarch64@sha256:162c81dfd3efc710732a571717d3c916a6945ebf279e879ddee3243af96fe46f
+FROM ${BASE_IMAGE}
+
+ARG RUST_VERSION=1.99.0
+ARG RUSTUP_VERSION=1.29.1
+ARG RUSTUP_INIT_SHA256=15f6e4ce9f583b929c996c91562bad6d4454f3281de858b02cdfdef615fac433
+ARG RUSTUP_HOST=aarch64-unknown-linux-gnu
+
+LABEL org.opencontainers.image.title="codebrix-cratebuilder-manylinux-aarch64"
+LABEL org.opencontainers.image.description="CodeBrix.RustTools.CrateBuilder linux-arm64 build image: manylinux_2_28_aarch64 + rustup + Rust"
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN set -eux; \
+    url="https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_HOST}/rustup-init"; \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/rustup-init "$url"; \
+    echo "${RUSTUP_INIT_SHA256}  /tmp/rustup-init" | sha256sum -c -; \
+    chmod +x /tmp/rustup-init; \
+    /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain "${RUST_VERSION}" --default-host "${RUSTUP_HOST}"; \
+    rm -f /tmp/rustup-init; \
+    chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}"; \
+    rustup --version; \
+    cargo --version; \
+    rustc --version; \
+    cc --version | sed -n 1p; \
+    ldd --version | sed -n 1p; \
+    command -v setsid
+
+WORKDIR /work
+ENV CARGO_TERM_COLOR=never RUSTUP_AUTO_INSTALL=0

@@ -72,7 +72,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CodeBrix.Docker.MitLicenseForever" Version="1.0.284.250" />
+    <PackageReference Include="CodeBrix.Docker.MitLicenseForever" Version="1.0.292.271" />
   </ItemGroup>
 
   <!--

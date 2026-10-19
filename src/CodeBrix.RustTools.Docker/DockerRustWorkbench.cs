@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -34,6 +35,7 @@ public sealed class DockerRustWorkbench : IDisposable
 {
     private readonly object _clientLock = new object();
     private readonly ResourceLabels _labels;
+    private readonly ConcurrentDictionary<string, PlatformProbeResult> _platformProbes = new ConcurrentDictionary<string, PlatformProbeResult>(StringComparer.Ordinal);
     private DockerClient _client;
     private volatile bool _engineVerified;
     private volatile DockerEngineInfo _engineInfo;
@@ -119,6 +121,58 @@ public sealed class DockerRustWorkbench : IDisposable
     public IReadOnlyList<DockerGuidance> GetDockerGuidance(DockerEngineInfo info) => DockerGuidanceProvider.ForEngine(info);
 
     /// <summary>
+    /// The small multi-platform image <see cref="ProbePlatformAsync"/> runs <c>uname -m</c> in,
+    /// pulled for the probed platform.
+    /// </summary>
+    public const string PlatformProbeImage = "busybox:latest";
+
+    /// <summary>
+    /// Finds out whether the engine runs containers of <paramref name="platform"/> (for example
+    /// <c>linux/arm64</c> on an x86-64 engine, which needs emulation). The engine's own platform
+    /// (or <c>null</c>) answers <see cref="PlatformProbeOutcome.Native"/> at once. For any other
+    /// the probe pulls <see cref="PlatformProbeImage"/> for that platform, runs <c>uname -m</c>
+    /// in a labelled throw-away container created with it, removes the container and reports
+    /// <see cref="PlatformProbeOutcome.Runs"/> (with the machine it printed),
+    /// <see cref="PlatformProbeOutcome.NoEmulator"/> ("exec format error": no qemu-user binfmt
+    /// handler - <see cref="PlatformProbeResult.Guidance"/> says how to register one),
+    /// <see cref="PlatformProbeOutcome.Refused"/> (the pull or the container creation was
+    /// refused) or <see cref="PlatformProbeOutcome.Failed"/>. The answer is cached per platform
+    /// for the lifetime of the workbench. Never throws for a Docker-side problem with the
+    /// platform; the pull leaves that platform's variant of the probe image on the engine.
+    /// </summary>
+    /// <param name="platform">The platform, for example <c>linux/arm64</c>; ONE value.</param>
+    /// <param name="cancellationToken">Cancels the probe (nothing is cached then).</param>
+    /// <exception cref="ArgumentException"><paramref name="platform"/> is not valid (see
+    /// <see cref="DockerPlatforms.Normalize"/>).</exception>
+    /// <exception cref="DockerUnavailableException">The engine cannot be used.</exception>
+    public async Task<PlatformProbeResult> ProbePlatformAsync(string platform, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        var normalized = DockerPlatforms.Normalize(platform);
+        var key = normalized ?? string.Empty;
+        if (_platformProbes.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
+        var result = await PlatformProbe.RunAsync(GetClient(), engine, _labels, Options.ContainerNamePrefix, normalized, PlatformProbeImage, cancellationToken).ConfigureAwait(false);
+        return _platformProbes.GetOrAdd(key, result);
+    }
+
+    /// <summary>
+    /// Whether the engine runs containers of <paramref name="platform"/>: the
+    /// <see cref="PlatformProbeResult.CanRun"/> of <see cref="ProbePlatformAsync"/> (cached per
+    /// platform for the lifetime of the workbench).
+    /// </summary>
+    /// <param name="platform">The platform, for example <c>linux/arm64</c>.</param>
+    /// <param name="cancellationToken">Cancels the probe.</param>
+    /// <exception cref="ArgumentException"><paramref name="platform"/> is not valid.</exception>
+    /// <exception cref="DockerUnavailableException">The engine cannot be used.</exception>
+    public async Task<bool> CanRunPlatformAsync(string platform, CancellationToken cancellationToken = default)
+        => (await ProbePlatformAsync(platform, cancellationToken).ConfigureAwait(false)).CanRun;
+
+    /// <summary>
     /// Makes sure the build image a spec describes exists on the engine. Pulls the base image
     /// when it is missing; when the spec adds no layers the base image itself is the result
     /// (<see cref="RustBuildImage.IsBaseImage"/>); otherwise the derived image tagged with the
@@ -151,7 +205,7 @@ public sealed class DockerRustWorkbench : IDisposable
         var resolved = (spec ?? new BuildImageSpec()).WithDefaults(Options);
         resolved.ValidateContainerfile();
         DockerfileGenerator.Generate(resolved);
-        var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
+        var engine = (await EnsureEngineAsync(cancellationToken).ConfigureAwait(false)).ForContainerPlatform(resolved.Platform);
         resolved = resolved.WithoutNativeLinuxTargets(engine);
         CrossTargetInfo.EnsureEngineCanBuild(engine, resolved.CrossTargets);
         var builder = new RustBuildImageBuilder(GetClient(), _labels);
@@ -199,6 +253,7 @@ public sealed class DockerRustWorkbench : IDisposable
         }
 
         BuildContainerFactory.MergeEnvironment(resolved.Env);
+        BuildContainerFactory.PlatformFor(image, resolved);
         await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
         var client = GetClient();
         var container = await RunDockerAsync(
@@ -527,7 +582,9 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <param name="target">The target to compile for. The cross targets need an image with
     /// their layer (see <see cref="BuildImageSpec.CrossTargets"/>); Android targets are linked
     /// with the NDK's clang for the container's <see cref="BuildContainer.AndroidApiLevel"/>
-    /// (default 24).</param>
+    /// (default 24). The container's native Linux target - <see cref="CrossTarget.LinuxNative"/>
+    /// - is the architecture of its <see cref="BuildContainer.Platform"/> (the engine's own when
+    /// it has none), and builds without <c>--target</c>.</param>
     /// <param name="progress">Receives cargo's progress; may be <c>null</c>.</param>
     /// <param name="cancellationToken">Kills cargo and every process it started inside the
     /// container.</param>
@@ -546,7 +603,7 @@ public sealed class DockerRustWorkbench : IDisposable
     public async Task<CargoCommandResult> RunCargoAsync(BuildContainer container, CargoCommand command, CargoBuildOptions options = null, CrossTarget target = CrossTarget.LinuxNative, IProgress<CargoProgress> progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfUnusable(container);
-        target = CrossTargetInfo.Resolve(target, await EnsureEngineAsync(cancellationToken).ConfigureAwait(false));
+        target = CrossTargetInfo.Resolve(target, (await EnsureEngineAsync(cancellationToken).ConfigureAwait(false)).ForContainerPlatform(container.Platform));
         if (!CrossTargetInfo.Get(target).IsSupported)
         {
             throw new CrossTargetNotSupportedException(target);
@@ -700,8 +757,9 @@ public sealed class DockerRustWorkbench : IDisposable
     /// <param name="options">What to copy and where; <see cref="ArtifactRetrievalOptions.HostDirectory"/>
     /// is required.</param>
     /// <param name="target">The target the artifacts were built for (it names the layout's
-    /// folder); <see cref="CrossTarget.LinuxNative"/> is resolved to the engine's own Linux
-    /// target first, so an ARM64 engine's native output lands in
+    /// folder); <see cref="CrossTarget.LinuxNative"/> is resolved to the container's own Linux
+    /// target first (the architecture of <see cref="BuildContainer.Platform"/>, else the
+    /// engine's), so an ARM64 engine's - or an arm64 container's - native output lands in
     /// <c>aarch64-unknown-linux-gnu</c> / <c>runtimes/linux-arm64/native</c>.</param>
     /// <param name="cancellationToken">Cancels the copy.</param>
     /// <exception cref="ArgumentNullException">An argument is <c>null</c>.</exception>
@@ -718,7 +776,7 @@ public sealed class DockerRustWorkbench : IDisposable
         }
 
         ArtifactRetriever.Validate(options);
-        var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
+        var engine = (await EnsureEngineAsync(cancellationToken).ConfigureAwait(false)).ForContainerPlatform(container.Platform);
         target = CrossTargetInfo.Resolve(target, engine);
         var transport = new DockerCopyTransport(GetClient(), container.Id);
         return await RunDockerAsync(
@@ -832,7 +890,7 @@ public sealed class DockerRustWorkbench : IDisposable
 
     internal async Task<CargoCommandResult> RunCargoCoreAsync(BuildContainer container, CargoCommand command, CargoBuildOptions options, CrossTarget target, string containerDirectory, Action<CargoProgress> report, CancellationToken cancellationToken)
     {
-        var engine = await EnsureEngineAsync(cancellationToken).ConfigureAwait(false);
+        var engine = (await EnsureEngineAsync(cancellationToken).ConfigureAwait(false)).ForContainerPlatform(container.Platform);
         var invocation = ContainerCargoRunner.CreateInvocation(command, options, target, containerDirectory, engine.NativeLinuxTriple, container.AndroidApiLevel);
         var client = GetClient();
         return await RunDockerAsync(

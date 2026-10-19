@@ -41,14 +41,19 @@ internal sealed class PlannerOptions
     /// known.</summary>
     public ICollection<string> KnownFeatures { get; set; }
 
+    /// <summary>Generate the getter and setter of each public field of an object
+    /// (<see cref="WrapperOptions.GenerateFieldAccessors"/>). Default true.</summary>
+    public bool GenerateFieldAccessors { get; set; } = true;
+
     /// <summary>The planner settings for a build request (wrapper names, WebGPU link,
-    /// targets, <see cref="FacadeMode.Always"/>).</summary>
+    /// targets, <see cref="FacadeMode.Always"/>, field accessors).</summary>
     public static PlannerOptions FromRequest(CrateBuildRequest request) => new PlannerOptions
     {
         ManagedNamespace = request?.Wrapper?.RootNamespace,
         ManagedAssemblyName = request?.Wrapper?.AssemblyName,
         LinkToCodeBrixWebGpu = request != null && request.LinkToCodeBrixWebGpu,
         ForceFacade = request != null && request.FacadeMode == FacadeMode.Always,
+        GenerateFieldAccessors = request?.Wrapper?.GenerateFieldAccessors ?? true,
         Targets = (request?.Targets ?? Enumerable.Empty<CrateTarget>()).ToList(),
     };
 }

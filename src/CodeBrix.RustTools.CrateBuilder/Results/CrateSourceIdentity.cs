@@ -30,6 +30,11 @@ public sealed class CrateSourceIdentity
     /// <summary>The tag that was asked for (git), else <c>null</c>.</summary>
     public string Tag { get; set; }
 
+    /// <summary>Git: true when <see cref="GitRepositorySource.CloneDirectory"/> already held a
+    /// clone of the same remote, which was fetched and checked out again instead of cloned;
+    /// false for a fresh clone and for a local source.</summary>
+    public bool CloneReused { get; set; }
+
     /// <summary>The manifest that was asked for: relative to the repository root (git), or
     /// the absolute path (local).</summary>
     public string ManifestPath { get; set; }

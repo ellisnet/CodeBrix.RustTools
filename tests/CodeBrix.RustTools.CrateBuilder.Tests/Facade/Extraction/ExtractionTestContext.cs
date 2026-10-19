@@ -14,11 +14,11 @@ internal static class ExtractionTestContext
     /// output folder, so the tool is compiled once per checkout and configuration).</summary>
     public static string SharedScratchRoot => Path.Combine(AppContext.BaseDirectory, "cratebuilder-scratch");
 
-    public static CrateBuilderContext Create(string scratchRoot, string runDirectory, RustWorkbench host = null, DockerRustWorkbench docker = null)
+    public static CrateBuilderContext Create(string scratchRoot, string runDirectory, RustWorkbench host = null, DockerRustWorkbench docker = null, string cargoTargetDirectory = null)
     {
         var hostWorkbench = host ?? new RustWorkbench();
         return new CrateBuilderContext(
-            new CrateBuilderOptions { ScratchRootDirectory = scratchRoot },
+            new CrateBuilderOptions { ScratchRootDirectory = scratchRoot, CargoTargetDirectory = cargoTargetDirectory },
             runDirectory,
             () => hostWorkbench,
             () => docker,

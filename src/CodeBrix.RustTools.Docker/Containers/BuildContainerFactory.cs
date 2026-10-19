@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeBrix.Docker;
+using CodeBrix.RustTools.Docker.Engine;
 using CodeBrix.RustTools.Docker.Images;
 using CodeBrix.RustTools.Docker.Internal;
 
@@ -55,6 +56,7 @@ internal static class BuildContainerFactory
         await EnsureVolumeAsync(client, workbenchOptions.CacheVolumeName + "-git", labels.For(ResourceLabels.KindCargoCache), cancellationToken).ConfigureAwait(false);
         await EnsureVolumeAsync(client, targetVolume, labels.For(ResourceLabels.KindTarget), cancellationToken).ConfigureAwait(false);
 
+        var platform = PlatformFor(image, options);
         var spec = BuildSpec(image, options, labels, workbenchOptions.CacheVolumeName, name, targetVolume, reuseKey);
         var id = await client.Containers.CreateAsync(spec, cancellationToken).ConfigureAwait(false);
         try
@@ -75,8 +77,17 @@ internal static class BuildContainerFactory
             throw;
         }
 
-        return new BuildContainer(client, id, name, image, workbenchOptions.CacheVolumeName, targetVolume, reuseKey, keep, wasReused: false);
+        return new BuildContainer(client, id, name, image, workbenchOptions.CacheVolumeName, targetVolume, reuseKey, keep, wasReused: false, platform);
     }
+
+    /// <summary>
+    /// The platform a build container runs on: <see cref="BuildContainerOptions.Platform"/> when
+    /// set, else the image's (<see cref="RustBuildImage.Platform"/>), normalized; <c>null</c> =
+    /// the engine's own.
+    /// </summary>
+    /// <exception cref="ArgumentException">The options' platform is not valid.</exception>
+    public static string PlatformFor(RustBuildImage image, BuildContainerOptions options)
+        => DockerPlatforms.Normalize(options?.Platform) ?? DockerPlatforms.Normalize(image?.Platform);
 
     /// <summary>
     /// The container specification for a build container (no engine calls).
@@ -98,6 +109,7 @@ internal static class BuildContainerFactory
             WorkingDir = BuildContainer.WorkDirectory,
             Limits = options.ResourceLimits,
             NetworkMode = options.NetworkDisabled ? NoNetworkMode : null,
+            Platform = PlatformFor(image, options),
         };
 
         foreach (var pair in MergeEnvironment(options.Env))
@@ -155,8 +167,9 @@ internal static class BuildContainerFactory
 
     /// <summary>
     /// A hash of everything that makes two build containers interchangeable: the image, the
-    /// cache volume, the requested name and target volume, the environment, the extra mounts
-    /// and the resource limits.
+    /// cache volume, the requested name and target volume, the network mode, the platform (when
+    /// one is set; a container without one keeps the key it always had), the environment, the
+    /// extra mounts and the resource limits.
     /// </summary>
     public static string ComputeReuseKey(RustBuildImage image, BuildContainerOptions options, string cacheVolumeName)
     {
@@ -168,6 +181,12 @@ internal static class BuildContainerFactory
         if (options.NetworkDisabled)
         {
             text.Append("network=").Append(NoNetworkMode).Append('\n');
+        }
+
+        var platform = PlatformFor(image, options);
+        if (platform != null)
+        {
+            text.Append("platform=").Append(platform).Append('\n');
         }
 
         foreach (var pair in MergeEnvironment(options.Env))
@@ -250,7 +269,7 @@ internal static class BuildContainerFactory
         var inspect = await client.Containers.InspectAsync(match.Id, cancellationToken).ConfigureAwait(false);
         var target = inspect.Mounts?.FirstOrDefault(m => m.Destination == BuildContainer.TargetPath)?.Name
                      ?? ResolveTargetVolume(options, inspect.DisplayName);
-        return new BuildContainer(client, inspect.Id, inspect.DisplayName, image, workbenchOptions.CacheVolumeName, target, reuseKey, keep, wasReused: true);
+        return new BuildContainer(client, inspect.Id, inspect.DisplayName, image, workbenchOptions.CacheVolumeName, target, reuseKey, keep, wasReused: true, PlatformFor(image, options));
     }
 
     private static async Task EnsureVolumeAsync(DockerClient client, string name, IDictionary<string, string> volumeLabels, CancellationToken cancellationToken)

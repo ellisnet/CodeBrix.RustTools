@@ -48,7 +48,8 @@ public sealed class BuildContainer : IAsyncDisposable
         string targetVolumeName,
         string reuseKey,
         bool keepOnDispose,
-        bool wasReused)
+        bool wasReused,
+        string platform = null)
     {
         _client = client;
         Id = id;
@@ -59,6 +60,7 @@ public sealed class BuildContainer : IAsyncDisposable
         ReuseKey = reuseKey;
         KeepOnDispose = keepOnDispose;
         WasReused = wasReused;
+        Platform = platform;
         IsRunning = true;
     }
 
@@ -70,6 +72,11 @@ public sealed class BuildContainer : IAsyncDisposable
 
     /// <summary>The image the container runs.</summary>
     public RustBuildImage Image { get; }
+
+    /// <summary>The Docker platform the container runs on (<see cref="BuildContainerOptions.Platform"/>,
+    /// else the image's <see cref="RustBuildImage.Platform"/>), or <c>null</c> for the engine's
+    /// own. Its architecture is the container's native Linux target.</summary>
+    public string Platform { get; }
 
     /// <summary>The named volume holding cargo's registry cache, mounted at
     /// <see cref="CargoRegistryPath"/>.</summary>

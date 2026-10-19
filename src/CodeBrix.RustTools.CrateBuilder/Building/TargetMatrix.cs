@@ -5,7 +5,6 @@ using CodeBrix.RustTools.CrateBuilder.Building.ManyLinux;
 using CodeBrix.RustTools.CrateBuilder.Internal.Pipeline;
 using CodeBrix.RustTools.CrateBuilder.Internal.Readiness;
 using CodeBrix.RustTools.Docker.Engine;
-using CodeBrix.RustTools.Docker.Images;
 using CodeBrix.RustTools.Toolchain;
 
 namespace CodeBrix.RustTools.CrateBuilder.Building;
@@ -14,9 +13,12 @@ namespace CodeBrix.RustTools.CrateBuilder.Building;
 /// Which of a request's targets one build mode can build on this machine (D1), decided
 /// BEFORE any cargo runs. It reuses the readiness check (<see cref="ReadinessReportBuilder"/>,
 /// <see cref="HostTargetEvaluator"/>, <see cref="DockerTargetEvaluator"/>) and adds the limits of
-/// the build drivers themselves: the ManyLinux baseline builds Linux targets only, and only the
-/// architectures CrateBuilder has a manylinux image for that are the engine's own. Every
-/// unbuildable target becomes a <see cref="CrateTargetOutcome.NotBuildableInThisMode"/> result
+/// the build drivers themselves: the ManyLinux baseline builds Linux targets only (it has an
+/// image for each of the three). Whether a manylinux image of another architecture than the
+/// engine's can run (under qemu-user emulation) is NOT decided here: the Docker build driver
+/// probes the platform once per build and turns a failed probe into a
+/// <see cref="CrateTargetOutcome.NotBuildableInThisMode"/> result itself. Every unbuildable
+/// target becomes a <see cref="CrateTargetOutcome.NotBuildableInThisMode"/> result
 /// with the guidance and reason; the others are built.
 /// </summary>
 internal sealed class TargetMatrix
@@ -93,17 +95,18 @@ internal sealed class TargetMatrix
     /// <summary>
     /// The reason the build driver of the request's mode cannot build a target although
     /// readiness allows it, or <c>null</c>. Host mode has none. Docker mode with
-    /// <see cref="LinuxBaseline.ManyLinux"/>: non-Linux targets, Linux architectures without a
-    /// manylinux image, and an image architecture that is not the engine's own (the image
-    /// would run under emulation, which the Docker package cannot request).
+    /// <see cref="LinuxBaseline.ManyLinux"/>: non-Linux targets.
     /// </summary>
     public static string DriverLimit(CrateBuildRequest request, CrateTarget target, DockerEngineInfo engine)
         => request.Mode != BuildMode.Docker ? null : ManyLinuxLimit(request.LinuxBaseline, target, engine);
 
-    /// <summary>Why <see cref="LinuxBaseline.ManyLinux"/> cannot build <paramref name="target"/>
-    /// on <paramref name="engine"/>, or <c>null</c> when it can (or the baseline is the rust
-    /// image). The readiness check uses it too, so it reports the same buildable set the Docker
-    /// driver builds.</summary>
+    /// <summary>Why <see cref="LinuxBaseline.ManyLinux"/> cannot build <paramref name="target"/>,
+    /// or <c>null</c> when it can (or the baseline is the rust image): only non-Linux targets
+    /// are ruled out. The readiness check uses it too, so it reports the same buildable set the
+    /// Docker driver tries. A Linux target whose image is not the engine's own architecture
+    /// (<paramref name="engine"/>) is buildable as far as this goes: its image runs under
+    /// qemu-user emulation, which the Docker build driver probes for before it builds
+    /// (<see cref="ManyLinuxImages.EmulationUnavailableReason"/>).</summary>
     public static string ManyLinuxLimit(LinuxBaseline baseline, CrateTarget target, DockerEngineInfo engine)
     {
         if (baseline != LinuxBaseline.ManyLinux)
@@ -111,25 +114,12 @@ internal sealed class TargetMatrix
             return null;
         }
 
-        if (!CrateTargets.IsLinux(target))
-        {
-            return ManyLinuxImages.NonLinuxReason;
-        }
-
-        if (!ManyLinuxImages.HasImage(target))
-        {
-            return ManyLinuxImages.ForeignArchitectureReason;
-        }
-
-        if (engine != null && !CrossTargetInfo.Get(CrateTargets.ToCrossTarget(target)).IsNativeOn(engine))
-        {
-            return $"The ManyLinux image of {CrateTargets.Rid(target)} is an x86-64 image and this Docker engine is {engine.Architecture ?? "of unknown architecture"}; running it would need a foreign-platform image, which CodeBrix.RustTools.Docker cannot request. Use LinuxBaseline.RustImage.";
-        }
-
-        return null;
+        return ManyLinuxImages.HasImage(target) ? null : ManyLinuxImages.NonLinuxReason;
     }
 
-    private static CrateTargetResult NotBuildableResult(BuildMode mode, CrateTarget target, string message, IReadOnlyList<InstallGuidance> guidance) => new CrateTargetResult
+    /// <summary>A <see cref="CrateTargetOutcome.NotBuildableInThisMode"/> result for a
+    /// target.</summary>
+    internal static CrateTargetResult NotBuildableResult(BuildMode mode, CrateTarget target, string message, IReadOnlyList<InstallGuidance> guidance) => new CrateTargetResult
     {
         Provenance = CrateBuildPipeline.DefaultProvenance(target, mode, HostOperatingSystem.Detect()),
         Target = target,

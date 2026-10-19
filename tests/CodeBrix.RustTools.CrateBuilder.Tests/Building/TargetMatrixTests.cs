@@ -98,36 +98,37 @@ public class TargetMatrixTests
     }
 
     [Fact]
-    public void manylinux_builds_linux_x64_only_and_names_the_reason_for_the_others()
+    public void manylinux_builds_the_three_linux_targets_and_names_the_reason_for_the_others()
     {
         //Arrange
-        var request = Request(BuildMode.Docker, LinuxBaseline.ManyLinux, CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64, CrateTarget.WinX64);
+        var request = Request(BuildMode.Docker, LinuxBaseline.ManyLinux, CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64, CrateTarget.WinX64, CrateTarget.AndroidArm64);
         var readiness = Readiness(BuildMode.Docker, request.Targets.ToList(), new CrateTarget[0], Engine("x86_64"));
 
         //Act
         var matrix = TargetMatrix.Create(request, readiness);
 
         //Assert
-        matrix.Buildable.Should().Equal(CrateTarget.LinuxX64);
-        matrix.NotBuildable.Select(r => r.Target).Should().Equal(CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64, CrateTarget.WinX64);
-        matrix.NotBuildable.Single(r => r.Target == CrateTarget.LinuxArm64).Message.Should().Be(ManyLinuxImages.ForeignArchitectureReason);
-        matrix.NotBuildable.Single(r => r.Target == CrateTarget.LinuxRiscV64).Message.Should().Be(ManyLinuxImages.ForeignArchitectureReason);
-        matrix.NotBuildable.Single(r => r.Target == CrateTarget.WinX64).Message.Should().Be(ManyLinuxImages.NonLinuxReason);
+        matrix.Buildable.Should().Equal(CrateTarget.LinuxX64, CrateTarget.LinuxArm64, CrateTarget.LinuxRiscV64);
+        matrix.NotBuildable.Select(r => r.Target).Should().Equal(CrateTarget.WinX64, CrateTarget.AndroidArm64);
+        matrix.NotBuildable.Should().OnlyContain(r => r.Message == ManyLinuxImages.NonLinuxReason);
     }
 
     [Fact]
-    public void manylinux_linux_x64_is_not_buildable_on_an_arm64_engine()
+    public void manylinux_leaves_a_foreign_architecture_to_the_driver_s_platform_probe()
     {
-        //Arrange
-        var request = Request(BuildMode.Docker, LinuxBaseline.ManyLinux, CrateTarget.LinuxX64);
+        //Arrange (on an arm64 engine linux-x64 is the foreign one)
+        var request = Request(BuildMode.Docker, LinuxBaseline.ManyLinux, CrateTarget.LinuxX64, CrateTarget.LinuxArm64);
         var readiness = Readiness(BuildMode.Docker, request.Targets.ToList(), new CrateTarget[0], Engine("aarch64"));
 
         //Act
         var matrix = TargetMatrix.Create(request, readiness);
 
         //Assert
-        matrix.Buildable.Should().BeEmpty();
-        matrix.NotBuildable.Single().Message.Should().Contain("aarch64");
+        matrix.Buildable.Should().Equal(CrateTarget.LinuxX64, CrateTarget.LinuxArm64);
+        matrix.NotBuildable.Should().BeEmpty();
+        TargetMatrix.ManyLinuxLimit(LinuxBaseline.ManyLinux, CrateTarget.LinuxRiscV64, Engine("x86_64")).Should().BeNull();
+        TargetMatrix.ManyLinuxLimit(LinuxBaseline.ManyLinux, CrateTarget.OsxArm64, Engine("x86_64")).Should().Be(ManyLinuxImages.NonLinuxReason);
+        TargetMatrix.ManyLinuxLimit(LinuxBaseline.RustImage, CrateTarget.OsxArm64, Engine("x86_64")).Should().BeNull();
     }
 
     [Fact]

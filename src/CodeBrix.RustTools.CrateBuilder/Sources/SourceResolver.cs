@@ -239,6 +239,7 @@ internal sealed class SourceResolver : ISourceResolver
                     Commit = commitSha,
                     Branch = string.IsNullOrWhiteSpace(source.Branch) ? null : source.Branch,
                     Tag = string.IsNullOrWhiteSpace(source.Tag) ? null : source.Tag,
+                    CloneReused = reuse,
                     ManifestPath = source.ManifestPath,
                     LocalManifestPath = manifest,
                     CrateName = facts.PackageName,
@@ -404,7 +405,7 @@ internal sealed class SourceResolver : ISourceResolver
         try
         {
             var origin = repository.Network.Remotes[OriginRemoteName];
-            var references = credentials == null ? repository.Network.ListReferences(origin) : repository.Network.ListReferences(origin, credentials);
+            var references = repository.Network.ListReferences(origin, credentials);
             var head = references.FirstOrDefault(r => r.CanonicalName == "HEAD");
             var target = (head as SymbolicReference)?.TargetIdentifier;
             if (target != null && target.StartsWith(headsPrefix, StringComparison.Ordinal))

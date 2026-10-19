@@ -29,6 +29,8 @@ namespace CodeBrix.RustTools.CrateBuilder.Building;
 /// <item>Windows: <see cref="WindowsGnullvmLinkProfile"/> on the llvm-mingw the readiness
 /// check found.</item>
 /// </list>
+/// With <see cref="CrateBuilderOptions.CargoTargetDirectory"/> every run uses its <c>host/</c>
+/// sub-folder as cargo's target folder (<see cref="SharedCargoTarget"/>).
 /// Targets the <see cref="TargetMatrix"/> rules out are returned as not buildable before any
 /// cargo runs. Only THE crate's dynamic library is collected (not dependencies, not build
 /// scripts or proc-macros), copied into the request's layout and verified.
@@ -233,6 +235,7 @@ internal sealed class HostBuildDriver : IBuildDriver
             options.Environment[variable] = ContributionMerger.AppendFlags(existing, contribution.RustFlags);
         }
 
+        SharedCargoTarget.ApplyHost(options, SharedCargoTarget.For(context.Options, SharedCargoTarget.HostFolderName));
         var cargoProgress = new SynchronousProgress<CargoProgress>(p => Report(context, progress, new CrateBuildProgress { Stage = CrateBuildStage.Building, Target = target, Message = p?.Message, CargoProgress = p }));
         CargoCommandResult cargo;
         try

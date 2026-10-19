@@ -87,6 +87,57 @@ public sealed class DockerEngineInfo
         _ => null,
     };
 
+    /// <summary>The Docker platform of the engine's own architecture (<c>linux/amd64</c>,
+    /// <c>linux/arm64</c> or <c>linux/riscv64</c>, see <see cref="DockerPlatforms"/>); <c>null</c>
+    /// when the architecture is unknown. Any other platform is foreign: its images run under
+    /// emulation (<see cref="DockerRustWorkbench.ProbePlatformAsync"/>).</summary>
+    public string NativePlatform => DockerPlatforms.ForArchitecture(Architecture);
+
+    /// <summary>
+    /// Whether <paramref name="platform"/> is the engine's own platform (<c>null</c> or blank
+    /// counts as the engine's own: it leaves the choice to the engine).
+    /// </summary>
+    /// <param name="platform">A platform such as <c>linux/arm64</c>.</param>
+    /// <exception cref="ArgumentException">The platform is not valid (see
+    /// <see cref="DockerPlatforms.Normalize"/>).</exception>
+    public bool IsNativePlatform(string platform)
+    {
+        var normalized = DockerPlatforms.Normalize(platform);
+        return normalized == null || (NativePlatform != null && DockerPlatforms.AreSame(normalized, NativePlatform));
+    }
+
+    /// <summary>
+    /// This engine as seen from a container of <paramref name="platform"/>: the same object for
+    /// the engine's own platform (or <c>null</c>), otherwise a copy whose
+    /// <see cref="Architecture"/> is the platform's machine, so that the native Linux target,
+    /// the native triple and the cross layers follow the container rather than the engine host.
+    /// </summary>
+    internal DockerEngineInfo ForContainerPlatform(string platform)
+    {
+        var normalized = DockerPlatforms.Normalize(platform);
+        if (normalized == null || IsNativePlatform(normalized))
+        {
+            return this;
+        }
+
+        return new DockerEngineInfo
+        {
+            IsAvailable = IsAvailable,
+            Endpoint = Endpoint,
+            ServerVersion = ServerVersion,
+            ApiVersion = ApiVersion,
+            OperatingSystem = OperatingSystem,
+            OsType = OsType,
+            Architecture = DockerPlatforms.MachineOf(normalized),
+            IsLinuxDaemon = IsLinuxDaemon,
+            IsDockerDesktop = IsDockerDesktop,
+            DockerCliFound = DockerCliFound,
+            HostOperatingSystem = HostOperatingSystem,
+            Issues = Issues,
+            ErrorMessage = ErrorMessage,
+        };
+    }
+
     /// <summary>A one-line description, for logs.</summary>
     public override string ToString()
         => IsAvailable

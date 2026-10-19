@@ -26,6 +26,102 @@ public class MappingPlannerTests
     public void DerivesErrorWithMessages_recognises_an_error_derive_that_writes_display(string derive, string attribute, bool expected)
         => PlannerRun.DerivesErrorWithMessages(new[] { "Debug", derive }, new[] { attribute }).Should().Be(expected);
 
+    /// <summary>The datacrate model plus <c>Holder</c>: a struct that is NOT Copy (Clone,
+    /// Debug, Default) with the two public f64 fields of Vec2 and no methods, so it is an
+    /// object whose only members are its field accessors and its constructor from the
+    /// fields.</summary>
+    private static CrateApiModel DataCrateWithHolder()
+    {
+        var root = System.Text.Json.Nodes.JsonNode.Parse(ModelSamples.Text(ModelSamples.DataCrate));
+        var structs = root["structs"].AsArray();
+        var holder = structs.First(n => (string)n["name"] == "Vec2").DeepClone();
+        holder["id"] = "struct:crate::Holder";
+        holder["name"] = "Holder";
+        holder["canonicalPath"] = "crate::Holder";
+        holder["publicPaths"] = new System.Text.Json.Nodes.JsonArray("crate::Holder");
+        holder["derives"] = new System.Text.Json.Nodes.JsonArray("Clone", "Debug", "Default");
+        holder["implementedTraits"] = new System.Text.Json.Nodes.JsonArray();
+        holder["attributes"] = new System.Text.Json.Nodes.JsonArray();
+        holder["repr"] = new System.Text.Json.Nodes.JsonArray();
+        structs.Add(holder);
+        return CrateApiModel.Parse(root.ToJsonString());
+    }
+
+    [Fact]
+    public void Plan_gives_an_objects_public_fields_getters_setters_and_a_constructor_by_default()
+    {
+        //Act
+        var plan = PlannerFixtures.Plan(DataCrateWithHolder());
+
+        //Assert
+        plan.Handles.Select(h => h.RustPath).Should().Contain("Holder");
+        plan.Functions.Select(f => f.RustPath).Should().Contain(new[] { "Holder::x", "Holder::set_x", "Holder::y", "Holder::set_y", "Holder::from_fields" });
+        plan.FieldAccessorsOmitted.Should().BeNull();
+        WrapReportWriter.Render(plan).Should().NotContain("Field accessors:");
+        MappingPlanJson.Serialize(plan).Should().NotContain("fieldAccessorsOmitted");
+    }
+
+    [Fact]
+    public void Plan_without_field_accessors_keeps_the_constructor_from_the_fields_and_counts_what_it_left_out()
+    {
+        //Arrange
+        var request = new CrateBuildRequest { Wrapper = new WrapperOptions { AssemblyName = "Data", RootNamespace = "Data", GenerateFieldAccessors = false } };
+
+        //Act
+        var options = PlannerOptions.FromRequest(request);
+        var plan = PlannerFixtures.Plan(DataCrateWithHolder(), null, options);
+
+        //Assert
+        options.GenerateFieldAccessors.Should().BeFalse();
+        plan.Handles.Select(h => h.RustPath).Should().Contain("Holder", "the constructor from the fields still makes it");
+        var holder = plan.Functions.Where(f => f.RustPath.StartsWith("Holder::", StringComparison.Ordinal)).Select(f => f.RustPath).ToList();
+        holder.Should().Contain("Holder::from_fields");
+        holder.Should().NotContain(new[] { "Holder::x", "Holder::set_x", "Holder::y", "Holder::set_y" });
+        plan.FieldAccessorsOmitted.Should().Be(4);
+        var report = WrapReportWriter.Render(plan);
+        report.Should().Contain("Field accessors:   off - 4 getters and setters of objects' public fields not generated, because WrapperOptions.GenerateFieldAccessors is false");
+        MappingPlanJson.Serialize(plan).Should().Contain("\"fieldAccessorsOmitted\": 4");
+        plan.Functions.Where(f => !f.RustPath.StartsWith("Holder::", StringComparison.Ordinal)).Select(f => f.CName)
+            .Should().Equal(PlannerFixtures.Plan(DataCrateWithHolder()).Functions.Where(f => !f.RustPath.StartsWith("Holder::", StringComparison.Ordinal)).Select(f => f.CName),
+                "nothing but the field accessors changes");
+    }
+
+    [Fact]
+    public void A_default_struct_whose_public_fields_cannot_cross_c_is_not_said_to_lack_default()
+    {
+        //Arrange - Tagged: Clone, Debug, Default; a private Rc<Vec<String>> and a public
+        // Arc<String> (the field shapes of hardcrate's Names), no methods.
+        var root = System.Text.Json.Nodes.JsonNode.Parse(ModelSamples.Text(ModelSamples.DataCrate));
+        var names = System.Text.Json.Nodes.JsonNode.Parse(ModelSamples.Text(ModelSamples.HardCrate))["structs"].AsArray().First(n => (string)n["name"] == "Names");
+        var tagged = names.DeepClone();
+        tagged["id"] = "struct:crate::Tagged";
+        tagged["name"] = "Tagged";
+        tagged["canonicalPath"] = "crate::Tagged";
+        tagged["module"] = "crate";
+        tagged["publicPaths"] = new System.Text.Json.Nodes.JsonArray("crate::Tagged");
+        tagged["implementedTraits"] = new System.Text.Json.Nodes.JsonArray("Clone", "Debug", "Default");
+        root["structs"].AsArray().Add(tagged);
+        var model = CrateApiModel.Parse(root.ToJsonString());
+
+        //Act
+        var plan = PlannerFixtures.Plan(model);
+
+        //Assert
+        plan.Handles.Select(h => h.RustPath).Should().NotContain("Tagged");
+        plan.SkippedItem("Tagged").Reason.Should().Be(
+            "has no wrappable members: it has no public methods or constructors, it cannot be built from its fields (some are private), and although it has Default, none of its public fields can cross C (see the field entries), so an object made by its Default could not be read or changed, and it cannot be passed to C as a plain value because it is not Copy (it may own memory or other resources). Add a FacadeOverride for it if you need it.");
+        plan.SkippedItem("Tagged").Reason.Should().NotContain("has no Default");
+    }
+
+    [Fact]
+    public void Planner_options_generate_field_accessors_unless_the_wrapper_turns_them_off()
+    {
+        //Assert
+        new PlannerOptions().GenerateFieldAccessors.Should().BeTrue();
+        PlannerOptions.FromRequest(new CrateBuildRequest()).GenerateFieldAccessors.Should().BeTrue("a build without a wrapper keeps the default");
+        PlannerOptions.FromRequest(new CrateBuildRequest { Wrapper = new WrapperOptions() }).GenerateFieldAccessors.Should().BeTrue();
+    }
+
     [Fact]
     public void Plan_names_the_facade_after_the_cargo_library()
     {

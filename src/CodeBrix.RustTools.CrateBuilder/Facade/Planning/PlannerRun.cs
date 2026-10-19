@@ -271,7 +271,14 @@ internal sealed class PlannerRun
         }
 
         AddFieldAccessors();
+        var omittedAccessors = OmitFieldAccessors();
         DropUnusedHandles();
+        if (omittedAccessors != null)
+        {
+            var kept = new HashSet<HandleType>(handles.Values);
+            plan.FieldAccessorsOmitted = omittedAccessors.Count(f => f.OwnerType is HandleType owner && kept.Contains(owner));
+        }
+
         AddGeneratedHandleFunctions();
         PlanConstants();
     }
@@ -1633,6 +1640,20 @@ internal sealed class PlannerRun
                 : !s.AllFieldsPublic || s.HasAttribute("#[non_exhaustive")
                     ? "it cannot be built from its fields (" + (!s.AllFieldsPublic ? "some are private" : "it is #[non_exhaustive]") + ") and has no Default"
                     : "not all of its fields have types that cross C (see the field entries), so it cannot be built from them";
+            if (!options.GenerateFieldAccessors && s.Fields.Any(f => f.IsPublic))
+            {
+                fieldsWhy = (pair.Value.HasDefault ? fieldsWhy.Replace(" and has no Default", string.Empty, StringComparison.Ordinal) : fieldsWhy)
+                    + ", its public fields get no getters or setters because WrapperOptions.GenerateFieldAccessors is false"
+                    + (pair.Value.HasDefault ? " (so an object made by its Default could not be read or changed)" : string.Empty);
+            }
+            else if (pair.Value.HasDefault && s.Fields.Any(f => f.IsPublic))
+            {
+                // Kept for its accessors when it had any: a Default object dropped here has
+                // public fields none of which crosses C.
+                fieldsWhy = fieldsWhy.Replace(" and has no Default", string.Empty, StringComparison.Ordinal)
+                    + ", and although it has Default, none of its public fields can cross C (see the field entries), so an object made by its Default could not be read or changed";
+            }
+
             var reason = methods > 0
                 ? $"has no wrappable members: none of its public functions can be wrapped automatically (see them in this list), {fieldsWhy}, and it cannot be passed to C as a plain value because it {why}. {OverrideAdvice}"
                 : $"has no wrappable members: it has no public methods or constructors, {fieldsWhy}, and it cannot be passed to C as a plain value because it {why}. {OverrideAdvice}";
@@ -1649,6 +1670,29 @@ internal sealed class PlannerRun
     }
 
     // ------------------------------------------------------------------ public fields of objects
+
+    /// <summary>With <see cref="PlannerOptions.GenerateFieldAccessors"/> off: removes the
+    /// planned getters and setters of public fields (and the "no getter" entries of fields
+    /// whose getter could not be planned) BEFORE unused objects are dropped, so an object is
+    /// no longer kept for its accessors alone, and returns the removed functions; <c>null</c>
+    /// when the accessors stay. The constructor from the fields and the data-carrying enums'
+    /// variant functions stay either way.</summary>
+    private List<PlannedFunction> OmitFieldAccessors()
+    {
+        if (options.GenerateFieldAccessors)
+        {
+            return null;
+        }
+
+        var removed = functions.Where(f => f.Generated is "getter" or "setter").ToList();
+        functions.RemoveAll(f => f.Generated is "getter" or "setter");
+        foreach (var list in fieldSkips.Values)
+        {
+            list.Clear();
+        }
+
+        return removed;
+    }
 
     /// <summary>Gives every object (a non-Copy struct) a getter and a setter for each public
     /// field whose type crosses C, and a constructor from its fields when every field is
